@@ -1,0 +1,6 @@
+**/.claude/settings.local.json
+
+# Ignore local virtual environments and editor settings
+.venv/
+.vscode/
+__pycache__/

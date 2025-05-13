@@ -1,0 +1,38 @@
+[project]
+name = "logai-mcp-server"
+version = "0.1.0"
+description = "Expose LogAI functionality as an MCP server."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Sherlog AI", email = "dev@sherlog.ai" }
+]
+# Core runtime dependencies for the server
+# These will be resolved into exact pins in uv.lock
+dependencies = [
+    "logai",
+    "mcp",
+    "fastmcp",
+    "pandas",
+    "numpy",
+    "scikit-learn",
+    "nltk",
+    "Cython",
+    "requests",
+    "scipy<2.0",
+    "gensim"
+]
+
+[project.scripts]
+logai-mcp-server = "logai_mcp_server:main"
+
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+# Disable building/installing this project as a package; it's just scripts.
+package = false
+
+[tool.setuptools]
+py-modules = ["logai_mcp_server"] 
