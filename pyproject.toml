@@ -10,7 +10,7 @@ authors = [
 # Core runtime dependencies for the server
 # These will be resolved into exact pins in uv.lock
 dependencies = [
-    "logai",
+    "logai @ git+https://github.com/navneet-mkr/logai.git@main",
     "mcp",
     "fastmcp",
     "pandas",

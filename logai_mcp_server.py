@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # dependencies = [
-#   "logai",
+#   "logai @ git+https://github.com/navneet-mkr/logai.git@main",
 #   "mcp",
 #   "fastmcp",
 #   "pandas",
@@ -43,7 +43,7 @@ from logai.analysis.clustering import ClusteringConfig, Clustering
 
 # Initialize FastMCP server
 app = FastMCP(name="LogAIMCP", dependencies=[
-    "logai",
+    "logai @ git+https://github.com/navneet-mkr/logai.git@main",
     "pandas",
     "numpy",
     "scipy<2.0",
