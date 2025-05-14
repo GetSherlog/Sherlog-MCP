@@ -10,7 +10,7 @@
 #   "nltk",
 #   "Cython",
 #   "requests",
-#   "scipy<2.0",
+#   "scipy<1.12",
 #   "gensim"
 # ]
 # requires-python = ">=3.10"
@@ -46,7 +46,7 @@ app = FastMCP(name="LogAIMCP", dependencies=[
     "logai @ git+https://github.com/navneet-mkr/logai.git@main",
     "pandas",
     "numpy",
-    "scipy<2.0",
+    "scipy<1.12",
     "gensim"
 ])
 

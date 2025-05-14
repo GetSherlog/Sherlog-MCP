@@ -19,7 +19,7 @@ dependencies = [
     "nltk",
     "Cython",
     "requests",
-    "scipy<2.0",
+    "scipy<1.12",
     "gensim"
 ]
 
