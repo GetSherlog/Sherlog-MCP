@@ -8,7 +8,6 @@ from logai_mcp.tools import (
     feature_extraction,
     clustering,
     anomaly,
-    pipelines,
     docker_tools,
     filesystem_tools,
 )  # noqa: F401

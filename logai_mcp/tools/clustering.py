@@ -1,4 +1,11 @@
-"""Clustering utilities (k-means etc.)."""
+"""Clustering utilities (k-means etc.).
+
+Follows the same execution model as `filesystem_tools.py`:
+
+• Heavy logic lives in a private `_cluster_log_features_impl` helper.
+• The public `cluster_log_features` wrapper merely assigns its return value
+  to the caller-supplied `save_as` variable inside the IPython shell.
+"""
 
 from typing import Any, Dict
 
@@ -7,28 +14,21 @@ import numpy as np
 
 from logai_mcp.session import (
     app,
-    log_tool,
-    _resolve,
-    session_vars,
     logger,
 )
 
 from logai.analysis.clustering import Clustering, ClusteringConfig
 from logai.algorithms.clustering_algo.kmeans import KMeansParams
+from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 
 # ---------------------------------------------------------------------------
 
-
-@app.tool()
-@log_tool
-def cluster_log_features(
+def _cluster_log_features_impl(
     feature_vector: Any,
     algo_name: str = "kmeans",
     n_clusters: int = 7,
     clustering_params: Dict | None = None,
-    *,
-    save_as: str,
-):
+) -> pd.Series:
     """Group log entries by features using clustering, returning a Pandas Series of cluster IDs.
 
     Applies a clustering algorithm (e.g., k-means) to numerical log features
@@ -59,9 +59,6 @@ def cluster_log_features(
         If `algo_name` is "kmeans", `n_clusters` from the main arguments is
         prioritized, but other `KMeansParams` can be set here (e.g., `{"algorithm": "elkan"}`).
         This argument is **not** resolved from `session_vars`.
-    save_as : str
-        The **required** key under which the Pandas Series of cluster IDs will be
-        stored in `session_vars`. Must be provided by the caller (LLM).
 
     Returns
     -------
@@ -103,12 +100,10 @@ def cluster_log_features(
     - Cluster IDs are returned as strings in the Series.
     """
 
-    fv = _resolve(feature_vector)
-
-    if isinstance(fv, pd.DataFrame):
-        df = fv
-    elif isinstance(fv, np.ndarray):
-        df = pd.DataFrame(fv)
+    if isinstance(feature_vector, pd.DataFrame):
+        df = feature_vector
+    elif isinstance(feature_vector, np.ndarray):
+        df = pd.DataFrame(feature_vector)
     else:
         raise TypeError("feature_vector must be DataFrame or numpy array")
 
@@ -136,6 +131,39 @@ def cluster_log_features(
     ids = clusterer.predict(df)
     series = pd.Series(ids.astype(str), name="cluster_id", index=df.index) # Ensure index alignment
 
-    session_vars[save_as] = series
-    logger.info(f"Saved cluster IDs (Series) to session_vars as '{save_as}'.")
     return series
+
+_SHELL.push({"_cluster_log_features_impl": _cluster_log_features_impl})
+
+@app.tool()
+async def cluster_log_features(
+    feature_vector: Any,
+    algo_name: str = "kmeans",
+    n_clusters: int = 7,
+    clustering_params: Dict | None = None,
+    *,
+    save_as: str,
+):
+    """Execute clustering inside the IPython shell and bind its result.
+
+    The heavy lifting is done by `_cluster_log_features_impl` (see its
+    docstring for full parameter semantics).  This wrapper simply assigns the
+    returned `pd.Series` to the variable name provided via `save_as` **inside
+    the interactive shell** so that subsequent tool calls (or the user) can
+    reference it by name.
+
+    Parameters
+    ----------
+    save_as : str
+        Name of the Python variable that will hold the resulting Series inside
+        the shell environment.
+    """
+
+    code = (
+        f"{save_as} = _cluster_log_features_impl("  # assignment\n"
+        f"    {repr(feature_vector)}, {repr(algo_name)}, {n_clusters}, {repr(clustering_params)})\n"
+        f"{save_as}"
+    )
+    return await run_code_in_shell(code)
+
+cluster_log_features.__doc__ = _cluster_log_features_impl.__doc__
