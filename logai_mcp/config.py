@@ -11,25 +11,16 @@ class Settings(BaseSettings): # type: ignore[misc]
     local .env file in the project root.
     """
 
-    # ---------------------------------------------------------------------
-    # Logging
-    # ---------------------------------------------------------------------
     log_level: str = Field(
         default="INFO",
         description="Root logging level for the LogAI-MCP server.",
     )
 
-    # ---------------------------------------------------------------------
-    # Data paths
-    # ---------------------------------------------------------------------
     data_directory: str = Field(
         default="data",
         description="Default directory where data files are stored/read.",
     )
 
-    # ---------------------------------------------------------------------
-    # Atlassian – Confluence & Jira integration
-    # ---------------------------------------------------------------------
     confluence_url: Optional[str] = Field(
         default=None,
         description="Base URL for the Confluence instance (e.g., https://your-company.atlassian.net/wiki)",
@@ -60,8 +51,12 @@ class Settings(BaseSettings): # type: ignore[misc]
         description="API token for Jira.",
     )
 
+    github_pat_token: Optional[str] = Field(
+        default=None,
+        description="Personal Access Token for GitHub API authentication.",
+    )
+
     class Config:
-        # Read optional .env file in the project root (next to pyproject.toml)
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
@@ -74,6 +69,7 @@ class Settings(BaseSettings): # type: ignore[misc]
             "jira_url": {"env": "JIRA_URL"},
             "jira_username": {"env": "JIRA_USERNAME"},
             "jira_api_token": {"env": "JIRA_API_TOKEN"},
+            "github_pat_token": {"env": "GITHUB_PAT_TOKEN"},
         }
 
 

@@ -106,7 +106,7 @@ async def list_shell_variables() -> list[str]:
     Returns
     -------
     list[str]
-        A sorted list of identified user variable names.
+        A sorted list of identified user variable names. To get the value of a variable, use the `inspect_shell_object` tool.
     """
     user_vars = []
     system_variables = {'In', 'Out', 'exit', 'quit', 'get_ipython', '_ih', '_oh', '_dh', '_sh', '_ip'}

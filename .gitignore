@@ -4,3 +4,6 @@
 .venv/
 .vscode/
 __pycache__/
+
+# Env files
+.env
