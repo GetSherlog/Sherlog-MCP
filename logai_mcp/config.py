@@ -66,6 +66,43 @@ class Settings(BaseSettings): # type: ignore[misc]
         alias="GITHUB_PAT_TOKEN",
     )
 
+    grafana_url: Optional[str] = Field(
+        default=None,
+        description="Base URL for the Grafana instance (e.g., http://localhost:3000)",
+        alias="GRAFANA_URL",
+    )
+
+    grafana_api_key: Optional[str] = Field(
+        default=None,
+        description="API key for Grafana authentication.",
+        alias="GRAFANA_API_KEY",
+    )
+
+    # AWS S3 Configuration
+    aws_access_key_id: Optional[str] = Field(
+        default=None,
+        description="AWS Access Key ID for S3 authentication.",
+        alias="AWS_ACCESS_KEY_ID",
+    )
+
+    aws_secret_access_key: Optional[str] = Field(
+        default=None,
+        description="AWS Secret Access Key for S3 authentication.",
+        alias="AWS_SECRET_ACCESS_KEY",
+    )
+
+    aws_region: str = Field(
+        default="us-east-1",
+        description="AWS region for S3 operations.",
+        alias="AWS_REGION",
+    )
+
+    aws_session_token: Optional[str] = Field(
+        default=None,
+        description="AWS Session Token for temporary credentials (optional).",
+        alias="AWS_SESSION_TOKEN",
+    )
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

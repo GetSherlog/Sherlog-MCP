@@ -42,6 +42,7 @@ dependencies = [
     "seaborn",
     "plotly",
     "PyYAML",
+    "boto3",  # AWS SDK for S3 integration
 ]
 
 [project.scripts]

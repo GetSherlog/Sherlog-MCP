@@ -13,6 +13,8 @@ from . import clustering
 from . import anomaly
 from . import docker_tools
 from . import filesystem_tools
+from . import grafana_tools
+from . import s3_tools
 
 # MCP tools are imported directly in server.py to avoid circular imports
 
@@ -25,6 +27,8 @@ __all__ = [
     "anomaly",
     "docker_tools",
     "filesystem_tools",
+    "grafana_tools",
+    "s3_tools",
 ]
 
 from .docker_tools import list_containers, get_container_logs
@@ -35,4 +39,15 @@ from .filesystem_tools import (
     search_files,
     get_file_info,
     list_allowed_directories
+)
+from .grafana_tools import (
+    query_prometheus,
+    list_prometheus_metric_metadata,
+    list_prometheus_metric_names,
+    list_prometheus_label_names,
+    list_prometheus_label_values,
+    query_loki_logs,
+    list_loki_label_names,
+    list_loki_label_values,
+    query_loki_stats,
 )

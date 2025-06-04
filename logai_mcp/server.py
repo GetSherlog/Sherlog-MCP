@@ -10,6 +10,7 @@ from logai_mcp.tools import (
     anomaly,
     docker_tools,
     filesystem_tools,
+    s3_tools,
 )  # noqa: F401
 
 import logging
