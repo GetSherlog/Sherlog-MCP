@@ -15,63 +15,62 @@ class Settings(BaseSettings): # type: ignore[misc]
     log_level: str = Field(
         default="INFO",
         description="Root logging level for the LogAI-MCP server.",
+        alias="LOGAI_MCP_LOG_LEVEL",
     )
 
     data_directory: str = Field(
         default="data",
         description="Default directory where data files are stored/read.",
+        alias="LOGAI_MCP_DATA_DIR",
     )
 
     confluence_url: Optional[str] = Field(
         default=None,
         description="Base URL for the Confluence instance (e.g., https://your-company.atlassian.net/wiki)",
+        alias="CONFLUENCE_URL",
     )
 
     confluence_username: Optional[str] = Field(
         default=None,
         description="Username/email used for Confluence API authentication.",
+        alias="CONFLUENCE_USERNAME",
     )
 
     confluence_api_token: Optional[str] = Field(
         default=None,
         description="API token for Confluence.",
+        alias="CONFLUENCE_API_TOKEN",
     )
 
     jira_url: Optional[str] = Field(
         default=None,
         description="Base URL for the Jira instance (e.g., https://your-company.atlassian.net)",
+        alias="JIRA_URL",
     )
 
     jira_username: Optional[str] = Field(
         default=None,
         description="Username/email used for Jira API authentication.",
+        alias="JIRA_USERNAME",
     )
 
     jira_api_token: Optional[str] = Field(
         default=None,
         description="API token for Jira.",
+        alias="JIRA_API_TOKEN",
     )
 
     github_pat_token: Optional[str] = Field(
         default=None,
         description="Personal Access Token for GitHub API authentication.",
+        alias="GITHUB_PAT_TOKEN",
     )
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-        fields = {
-            "log_level": {"env": "LOGAI_MCP_LOG_LEVEL"},
-            "data_directory": {"env": "LOGAI_MCP_DATA_DIR"},
-            "confluence_url": {"env": "CONFLUENCE_URL"},
-            "confluence_username": {"env": "CONFLUENCE_USERNAME"},
-            "confluence_api_token": {"env": "CONFLUENCE_API_TOKEN"},
-            "jira_url": {"env": "JIRA_URL"},
-            "jira_username": {"env": "JIRA_USERNAME"},
-            "jira_api_token": {"env": "JIRA_API_TOKEN"},
-            "github_pat_token": {"env": "GITHUB_PAT_TOKEN"},
-        }
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "case_sensitive": False,
+    }
 
 
 @lru_cache()
