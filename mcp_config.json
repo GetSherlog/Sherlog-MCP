@@ -1,0 +1,36 @@
+{
+  "mcp_clients": {
+    "sequential_thinking": {
+      "command": "npx",
+      "args": ["-y", "@smithery-ai/server-sequential-thinking"],
+      "env": {},
+      "description": "Dynamic and reflective problem-solving through structured thinking process (Most popular MCP - 5,550+ uses)",
+      "timeout": 30,
+      "auto_retry": true
+    },
+    "filesystem": {
+      "command": "npx", 
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+      "env": {},
+      "description": "Secure file operations with configurable access controls (Official reference server)",
+      "timeout": 30,
+      "auto_retry": true
+    },
+    "fetch": {
+      "command": "npx",
+      "args": ["-y", "@smithery-ai/fetch"],
+      "env": {},
+      "description": "Simple web content fetching and conversion for efficient LLM usage",
+      "timeout": 30,
+      "auto_retry": true
+    },
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@smithery-ai/memory"],
+      "env": {},
+      "description": "Knowledge graph-based persistent memory system",
+      "timeout": 30,
+      "auto_retry": true
+    }
+  }
+} 

@@ -26,7 +26,22 @@ dependencies = [
     "pydantic>=2.0,<3.0",
     "matplotlib",
     "tabulate",
-    "ipython"
+    "ipython",
+    "fastapi",
+    "uvicorn",
+    "pydantic-settings",
+    "python-multipart",
+    "websockets",
+    "jinja2",
+    "aiofiles",
+    "rich",
+    "typer",
+    "httpx",
+    "ipykernel",
+    "jupyter",
+    "seaborn",
+    "plotly",
+    "PyYAML",
 ]
 
 [project.scripts]
