@@ -42,7 +42,9 @@ dependencies = [
     "seaborn",
     "plotly",
     "PyYAML",
-    "boto3",  # AWS SDK for S3 integration
+    "boto3",
+    "tree-sitter",
+    "tree-sitter-language-pack",
 ]
 
 [project.scripts]

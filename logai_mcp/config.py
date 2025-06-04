@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pydantic import Field
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import Optional, List
 
 
 class Settings(BaseSettings): # type: ignore[misc]
@@ -101,6 +101,19 @@ class Settings(BaseSettings): # type: ignore[misc]
         default=None,
         description="AWS Session Token for temporary credentials (optional).",
         alias="AWS_SESSION_TOKEN",
+    )
+
+    # Code retrieval configuration
+    codebase_path: Optional[str] = Field(
+        default=None,
+        description="Path to the codebase directory for code retrieval tools.",
+        alias="CODEBASE_PATH",
+    )
+
+    supported_languages: List[str] = Field(
+        default=["java", "kotlin", "python", "typescript", "javascript", "cpp", "rust"],
+        description="List of programming languages to analyze in the codebase. Supported: java, kotlin, python, typescript, javascript, cpp, rust",
+        alias="SUPPORTED_LANGUAGES",
     )
 
     model_config = {
