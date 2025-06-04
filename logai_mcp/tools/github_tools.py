@@ -17,9 +17,14 @@ def _get_github_session():
     if not settings.github_pat_token:
         raise ValueError("GITHUB_PAT_TOKEN must be set in environment variables")
     
+    # Validate token format
+    token = settings.github_pat_token.strip()
+    if not (token.startswith('ghp_') or token.startswith('github_pat_')):
+        logger.warning(f"GitHub token format may be invalid. Expected to start with 'ghp_' or 'github_pat_', got: {token[:10]}...")
+    
     session = requests.Session()
     session.headers.update({
-        "Authorization": f"token {settings.github_pat_token}",
+        "Authorization": f"token {token}",
         "Accept": "application/vnd.github.v3+json",
         "User-Agent": "LogAI-MCP-Server"
     })
@@ -45,7 +50,35 @@ def _get_issue_impl(owner: str, repo: str, issue_number: int) -> pd.DataFrame:
     
     logger.info(f"Fetching GitHub issue #{issue_number} from {owner}/{repo}")
     response = session.get(url)
-    response.raise_for_status()
+    
+    # Enhanced error handling with detailed information
+    if not response.ok:
+        error_details = {
+            'status_code': response.status_code,
+            'url': url,
+            'headers': dict(response.headers),
+            'response_text': response.text[:500] if response.text else "No response body"
+        }
+        
+        if response.status_code == 403:
+            rate_limit_remaining = response.headers.get('X-RateLimit-Remaining', 'Unknown')
+            rate_limit_reset = response.headers.get('X-RateLimit-Reset', 'Unknown')
+            error_msg = f"GitHub API 403 Forbidden: This could be due to:\n"
+            error_msg += f"1. Invalid or insufficient token permissions\n"
+            error_msg += f"2. Rate limiting (remaining: {rate_limit_remaining}, reset: {rate_limit_reset})\n"
+            error_msg += f"3. Repository access restrictions\n"
+            error_msg += f"4. Invalid repository or issue number\n"
+            error_msg += f"URL: {url}\n"
+            error_msg += f"Response: {response.text[:200]}"
+            logger.error(error_msg)
+            raise requests.exceptions.HTTPError(error_msg, response=response)
+        elif response.status_code == 404:
+            error_msg = f"GitHub API 404 Not Found: Repository '{owner}/{repo}' or issue #{issue_number} does not exist or is not accessible"
+            logger.error(error_msg)
+            raise requests.exceptions.HTTPError(error_msg, response=response)
+        else:
+            logger.error(f"GitHub API Error: {error_details}")
+            response.raise_for_status()
     
     issue = response.json()
     logger.info(f"Retrieved issue: {issue['title']}")
@@ -72,7 +105,83 @@ def _get_issue_impl(owner: str, repo: str, issue_number: int) -> pd.DataFrame:
     
     return pd.DataFrame(issue_data)
 
-_SHELL.push({"get_issue_impl": _get_issue_impl})
+
+def _test_github_connection_impl() -> pd.DataFrame:
+    """
+    Test GitHub API connection and token validity.
+    
+    Returns:
+        pd.DataFrame: Connection test results
+    """
+    try:
+        session = _get_github_session()
+        
+        # Test 1: Check authenticated user
+        logger.info("Testing GitHub API connection...")
+        auth_response = session.get("https://api.github.com/user")
+        
+        # Test 2: Check rate limits
+        rate_response = session.get("https://api.github.com/rate_limit")
+        
+        results = []
+        
+        # Auth test result
+        if auth_response.ok:
+            user_data = auth_response.json()
+            results.append({
+                'test': 'Authentication',
+                'status': 'SUCCESS',
+                'details': f"Logged in as: {user_data.get('login', 'Unknown')}",
+                'user_id': user_data.get('id'),
+                'user_type': user_data.get('type'),
+                'scopes': auth_response.headers.get('X-OAuth-Scopes', 'Not available')
+            })
+        else:
+            results.append({
+                'test': 'Authentication', 
+                'status': 'FAILED',
+                'details': f"HTTP {auth_response.status_code}: {auth_response.text[:200]}",
+                'user_id': None,
+                'user_type': None,
+                'scopes': None
+            })
+        
+        # Rate limit test result  
+        if rate_response.ok:
+            rate_data = rate_response.json()
+            core_limit = rate_data.get('resources', {}).get('core', {})
+            results.append({
+                'test': 'Rate Limits',
+                'status': 'SUCCESS', 
+                'details': f"Remaining: {core_limit.get('remaining', 'Unknown')}/{core_limit.get('limit', 'Unknown')}",
+                'user_id': None,
+                'user_type': None,
+                'scopes': f"Reset at: {core_limit.get('reset', 'Unknown')}"
+            })
+        else:
+            results.append({
+                'test': 'Rate Limits',
+                'status': 'FAILED',
+                'details': f"HTTP {rate_response.status_code}: {rate_response.text[:200]}",
+                'user_id': None,
+                'user_type': None, 
+                'scopes': None
+            })
+            
+        return pd.DataFrame(results)
+        
+    except Exception as e:
+        logger.error(f"GitHub connection test failed: {e}")
+        return pd.DataFrame([{
+            'test': 'Connection',
+            'status': 'FAILED', 
+            'details': str(e),
+            'user_id': None,
+            'user_type': None,
+            'scopes': None
+        }])
+
+_SHELL.push({"get_issue_impl": _get_issue_impl, "test_github_connection_impl": _test_github_connection_impl})
 
 
 @app.tool()
@@ -90,6 +199,23 @@ async def get_issue(owner: str, repo: str, issue_number: int, *, save_as: str) -
         pd.DataFrame: Issue details as a DataFrame
     """
     code = f'{save_as} = get_issue_impl("{owner}", "{repo}", {issue_number})\n{save_as}'
+    df = await run_code_in_shell(code)
+    if isinstance(df, pd.DataFrame):
+        return df.to_dict('records')
+
+
+@app.tool()
+async def test_github_connection(*, save_as: str = "github_test_results") -> Optional[pd.DataFrame]:
+    """
+    Test GitHub API connection and token validity.
+    
+    Args:
+        save_as (str): Variable name to store the test results
+        
+    Returns:
+        pd.DataFrame: Test results showing connection status, user info, and rate limits
+    """
+    code = f'{save_as} = test_github_connection_impl()\n{save_as}'
     df = await run_code_in_shell(code)
     if isinstance(df, pd.DataFrame):
         return df.to_dict('records')

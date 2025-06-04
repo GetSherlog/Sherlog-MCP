@@ -11,6 +11,9 @@ from logai_mcp.tools import (
     docker_tools,
     filesystem_tools,
     s3_tools,
+    github_tools,
+    grafana_tools,
+    code_retrieval,
 )  # noqa: F401
 
 import logging

@@ -10,6 +10,14 @@ _SHELL.reset()
 
 async def run_code_in_shell(code: str):
     execution_result = await _SHELL.run_cell_async(code)
+    
+    # Check for execution errors and raise them instead of silently ignoring
+    if execution_result.error_before_exec:
+        raise execution_result.error_before_exec
+    
+    if execution_result.error_in_exec:
+        raise execution_result.error_in_exec
+    
     return execution_result.result
 
 @app.tool()

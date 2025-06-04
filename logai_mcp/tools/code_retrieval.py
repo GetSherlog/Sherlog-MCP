@@ -600,7 +600,9 @@ async def configure_supported_languages(
     
     try:
         # Save to shell variable
-        code = f"{save_as} = {repr(valid_requested)}\nprint(f'Configured {{len({save_as})}} languages: {{', '.join({save_as})}}')"
+        config_line = f"{save_as} = {repr(valid_requested)}"
+        print_line = f"print('Configured ' + str(len({save_as})) + ' languages: ' + ', '.join({save_as}))"
+        code = config_line + "\n" + print_line
         await run_code_in_shell(code)
         
         result_msg = [

@@ -36,6 +36,5 @@ COPY --from=builder /usr/local /usr/local
 WORKDIR /app
 COPY logai_mcp ./logai_mcp
 COPY logai_mcp_server.py ./
-COPY mcp_config.json ./
 
 ENTRYPOINT ["uv", "run", "-m", "logai_mcp.server"] 

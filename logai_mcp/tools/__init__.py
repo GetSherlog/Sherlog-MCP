@@ -14,6 +14,7 @@ from . import anomaly
 from . import docker_tools
 from . import filesystem_tools
 from . import grafana_tools
+from . import github_tools
 from . import s3_tools
 from . import code_retrieval
 
@@ -29,6 +30,7 @@ __all__ = [
     "docker_tools",
     "filesystem_tools",
     "grafana_tools",
+    "github_tools",
     "s3_tools",
     "code_retrieval",
 ]
@@ -52,6 +54,16 @@ from .grafana_tools import (
     list_loki_label_names,
     list_loki_label_values,
     query_loki_stats,
+)
+from .github_tools import (
+    get_issue,
+    search_issues,
+    get_pull_request,
+    list_pull_requests,
+    get_pull_request_files,
+    get_pull_request_comments,
+    get_pull_request_reviews,
+    list_commits,
 )
 from .code_retrieval import (
     find_method_implementation,
