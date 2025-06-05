@@ -19,6 +19,7 @@ from . import s3_tools
 from . import cloudwatch_tools
 from . import code_retrieval
 from . import sentry_tools
+from . import mixpanel_tools
 
 # MCP tools are imported directly in server.py to avoid circular imports
 
@@ -37,6 +38,7 @@ __all__ = [
     "cloudwatch_tools",
     "code_retrieval",
     "sentry_tools",
+    "mixpanel_tools",
 ]
 
 from .docker_tools import list_containers, get_container_logs
@@ -97,4 +99,13 @@ from .sentry_tools import (
     resolve_short_id,
     create_project,
     list_organization_replays,
+)
+from .mixpanel_tools import (
+    export_events,
+    query_insights,
+    query_funnels,
+    query_retention,
+    query_people,
+    list_event_names,
+    list_event_properties,
 )

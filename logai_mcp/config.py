@@ -129,6 +129,19 @@ class Settings(BaseSettings): # type: ignore[misc]
         alias="AWS_SESSION_TOKEN",
     )
 
+    # Mixpanel Configuration
+    mixpanel_api_secret: Optional[str] = Field(
+        default=None,
+        description="API secret for Mixpanel authentication.",
+        alias="MIXPANEL_API_SECRET",
+    )
+
+    mixpanel_host: Optional[str] = Field(
+        default="https://mixpanel.com",
+        description="Base URL for the Mixpanel instance (e.g., https://mixpanel.com or https://eu.mixpanel.com)",
+        alias="MIXPANEL_HOST",
+    )
+
     # Code retrieval configuration
     codebase_path: Optional[str] = Field(
         default=None,
@@ -140,6 +153,13 @@ class Settings(BaseSettings): # type: ignore[misc]
         default=["java", "kotlin", "python", "typescript", "javascript", "cpp", "rust"],
         description="List of programming languages to analyze in the codebase. Supported: java, kotlin, python, typescript, javascript, cpp, rust",
         alias="SUPPORTED_LANGUAGES",
+    )
+
+    # Kubernetes Configuration
+    kubeconfig_path: Optional[str] = Field(
+        default=None,
+        description="Path to the Kubernetes config file. If not provided, will use default kubeconfig or in-cluster config.",
+        alias="KUBECONFIG_PATH",
     )
 
     model_config = {
