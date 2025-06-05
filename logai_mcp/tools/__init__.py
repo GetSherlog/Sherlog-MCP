@@ -18,6 +18,7 @@ from . import github_tools
 from . import s3_tools
 from . import cloudwatch_tools
 from . import code_retrieval
+from . import sentry_tools
 
 # MCP tools are imported directly in server.py to avoid circular imports
 
@@ -35,6 +36,7 @@ __all__ = [
     "s3_tools",
     "cloudwatch_tools",
     "code_retrieval",
+    "sentry_tools",
 ]
 
 from .docker_tools import list_containers, get_container_logs
@@ -85,4 +87,14 @@ from .code_retrieval import (
     list_all_classes,
     get_codebase_stats,
     configure_supported_languages,
+)
+from .sentry_tools import (
+    list_projects,
+    get_sentry_issue,
+    list_project_issues,
+    get_sentry_event,
+    list_issue_events,
+    resolve_short_id,
+    create_project,
+    list_organization_replays,
 )

@@ -78,6 +78,19 @@ class Settings(BaseSettings): # type: ignore[misc]
         alias="GRAFANA_API_KEY",
     )
 
+    # Sentry Configuration
+    sentry_auth_token: Optional[str] = Field(
+        default=None,
+        description="Authentication token for Sentry API access.",
+        alias="SENTRY_AUTH_TOKEN",
+    )
+
+    sentry_host: Optional[str] = Field(
+        default="https://sentry.io",
+        description="Base URL for the Sentry instance (e.g., https://sentry.io or https://your-domain.sentry.io)",
+        alias="SENTRY_HOST",
+    )
+
     # MindsDB Configuration
     mindsdb_url: Optional[str] = Field(
         default=None,

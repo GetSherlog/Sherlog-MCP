@@ -13,7 +13,9 @@ from logai_mcp.tools import (
     s3_tools,
     github_tools,
     grafana_tools,
+    cloudwatch_tools,
     code_retrieval,
+    sentry_tools,
 )  # noqa: F401
 
 import logging
