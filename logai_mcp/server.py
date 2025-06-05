@@ -24,6 +24,10 @@ def main():
     """Main entry point for the MCP server"""
     logger.info("Starting LogAI MCP Server...")
     
+    # Auto-restore previous session
+    from logai_mcp.session import restore_session
+    restore_session()
+    
     # FastMCP runs on stdio transport by default
     app.run()
 

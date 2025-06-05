@@ -8,6 +8,10 @@ instantiating additional `FastMCP` objects.
 
 from typing import Any, Dict, List
 import logging
+import dill
+import pickle
+from pathlib import Path
+import atexit
 
 import nltk
 import nltk.downloader
@@ -37,3 +41,53 @@ if not logger.handlers:
 
 settings = get_settings()
 logger.setLevel(getattr(logging, settings.log_level.upper(), logging.INFO))
+
+# Session persistence
+SESSION_FILE = Path("session_state.pkl")
+
+def save_session():
+    """Save current session state"""
+    try:
+        from logai_mcp.ipython_shell_utils import _SHELL
+        
+        state = {
+            'session_vars': session_vars,
+            'session_meta': session_meta,
+            'user_ns': {k: v for k, v in _SHELL.user_ns.items() 
+                       if not k.startswith('_') and k not in {'In', 'Out', 'exit', 'quit', 'get_ipython'}}
+        }
+        
+        with open(SESSION_FILE, 'wb') as f:
+            dill.dump(state, f)
+            
+        logger.info(f"Session saved to {SESSION_FILE}")
+        
+    except Exception as e:
+        logger.error(f"Session save failed: {e}")
+
+def restore_session():
+    """Restore session state if backup exists"""
+    if not SESSION_FILE.exists():
+        return
+        
+    try:
+        from logai_mcp.ipython_shell_utils import _SHELL
+        
+        with open(SESSION_FILE, 'rb') as f:
+            state = dill.load(f)
+            
+        session_vars.clear()
+        session_vars.update(state.get('session_vars', {}))
+        
+        session_meta.clear() 
+        session_meta.update(state.get('session_meta', {}))
+        
+        _SHELL.user_ns.update(state.get('user_ns', {}))
+        
+        logger.info("Session restored")
+        
+    except Exception as e:
+        logger.error(f"Session restore failed: {e}")
+
+# Auto-save on shutdown
+atexit.register(save_session)
