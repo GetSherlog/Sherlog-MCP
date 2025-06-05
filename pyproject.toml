@@ -25,6 +25,7 @@ dependencies = [
     "polars",
     "pydantic>=2.0,<3.0",
     "matplotlib",
+    "mindsdb_sdk",
     "tabulate",
     "ipython",
     "fastapi",

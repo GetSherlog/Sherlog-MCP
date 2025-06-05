@@ -908,4 +908,282 @@ async def list_commits(owner: str, repo: str, sha: Optional[str] = None,
     
     df = await run_code_in_shell(code)
     if isinstance(df, pd.DataFrame):
+        return df.to_dict('records')
+
+
+def _get_commit_details_impl(owner: str, repo: str, commit_sha: str) -> pd.DataFrame:
+    """
+    Get detailed information about a specific commit, including files changed and diffs.
+    
+    Args:
+        owner (str): Repository owner
+        repo (str): Repository name
+        commit_sha (str): Commit SHA to get details for
+        
+    Returns:
+        pd.DataFrame: Commit details including file changes and diffs
+    """
+    session = _get_github_session()
+    
+    url = f"https://api.github.com/repos/{owner}/{repo}/commits/{commit_sha}"
+    
+    logger.info(f"Fetching GitHub commit details {commit_sha[:8]} from {owner}/{repo}")
+    response = session.get(url)
+    response.raise_for_status()
+    
+    commit = response.json()
+    logger.info(f"Retrieved commit: {commit['commit']['message'][:50]}...")
+    
+    # Convert commit files to DataFrame rows
+    rows = []
+    files = commit.get('files', [])
+    
+    if not files:
+        # If no files, create a single row with commit info
+        row = {
+            'sha': commit['sha'],
+            'message': commit['commit']['message'],
+            'author_name': commit['commit']['author']['name'],
+            'author_email': commit['commit']['author']['email'],
+            'author_date': commit['commit']['author']['date'],
+            'committer_name': commit['commit']['committer']['name'],
+            'committer_email': commit['commit']['committer']['email'],
+            'committer_date': commit['commit']['committer']['date'],
+            'total_additions': commit['stats']['additions'],
+            'total_deletions': commit['stats']['deletions'],
+            'total_changes': commit['stats']['total'],
+            'files_changed_count': len(files),
+            'filename': None,
+            'file_status': None,
+            'file_additions': None,
+            'file_deletions': None,
+            'file_changes': None,
+            'file_patch': None,
+            'html_url': commit['html_url'],
+            'owner': owner,
+            'repo': repo
+        }
+        rows.append(row)
+    else:
+        # Create a row for each file changed
+        for file in files:
+            row = {
+                'sha': commit['sha'],
+                'message': commit['commit']['message'],
+                'author_name': commit['commit']['author']['name'],
+                'author_email': commit['commit']['author']['email'],
+                'author_date': commit['commit']['author']['date'],
+                'committer_name': commit['commit']['committer']['name'],
+                'committer_email': commit['commit']['committer']['email'],
+                'committer_date': commit['commit']['committer']['date'],
+                'total_additions': commit['stats']['additions'],
+                'total_deletions': commit['stats']['deletions'],
+                'total_changes': commit['stats']['total'],
+                'files_changed_count': len(files),
+                'filename': file['filename'],
+                'file_status': file['status'],
+                'file_additions': file['additions'],
+                'file_deletions': file['deletions'],
+                'file_changes': file['changes'],
+                'file_patch': file.get('patch', ''),
+                'file_blob_url': file.get('blob_url'),
+                'file_raw_url': file.get('raw_url'),
+                'previous_filename': file.get('previous_filename'),
+                'html_url': commit['html_url'],
+                'owner': owner,
+                'repo': repo
+            }
+            rows.append(row)
+    
+    return pd.DataFrame(rows)
+
+
+def _analyze_file_commits_around_issue_impl(owner: str, repo: str, issue_number: int, 
+                                          file_paths: Optional[list] = None,
+                                          days_before: int = 7, days_after: int = 1) -> pd.DataFrame:
+    """
+    Analyze commits to specific files around the time an issue was created.
+    This helps identify what file changes might be responsible for an issue.
+    
+    Args:
+        owner (str): Repository owner
+        repo (str): Repository name  
+        issue_number (int): Issue number to analyze
+        file_paths (Optional[list]): Specific file paths to analyze (if None, gets all commits)
+        days_before (int): Number of days before issue creation to look for commits
+        days_after (int): Number of days after issue creation to look for commits
+        
+    Returns:
+        pd.DataFrame: Commits around issue creation time with correlation analysis
+    """
+    from datetime import datetime, timedelta
+    import pandas as pd
+    
+    session = _get_github_session()
+    
+    # First get the issue to find creation date
+    issue_url = f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}"
+    issue_response = session.get(issue_url)
+    issue_response.raise_for_status()
+    issue = issue_response.json()
+    
+    issue_created_at = datetime.fromisoformat(issue['created_at'].replace('Z', '+00:00'))
+    
+    # Calculate time range
+    since = (issue_created_at - timedelta(days=days_before)).isoformat()
+    until = (issue_created_at + timedelta(days=days_after)).isoformat()
+    
+    logger.info(f"Analyzing commits around issue #{issue_number} created at {issue_created_at}")
+    logger.info(f"Looking for commits between {since} and {until}")
+    
+    all_commits = []
+    
+    if file_paths:
+        # Get commits for each specific file path
+        for file_path in file_paths:
+            commits_url = f"https://api.github.com/repos/{owner}/{repo}/commits"
+            params = {
+                'path': file_path,
+                'since': since,
+                'until': until,
+                'per_page': 100
+            }
+            
+            logger.info(f"Getting commits for file: {file_path}")
+            response = session.get(commits_url, params=params)
+            response.raise_for_status()
+            commits = response.json()
+            
+            for commit in commits:
+                commit_data = commit['commit']
+                commit_date = datetime.fromisoformat(commit_data['author']['date'].replace('Z', '+00:00'))
+                
+                # Calculate time difference from issue creation
+                time_diff = (commit_date - issue_created_at).total_seconds() / 3600  # hours
+                
+                row = {
+                    'issue_number': issue_number,
+                    'issue_title': issue['title'],
+                    'issue_created_at': issue['created_at'],
+                    'issue_state': issue['state'],
+                    'commit_sha': commit['sha'],
+                    'commit_message': commit_data['message'],
+                    'commit_author': commit_data['author']['name'],
+                    'commit_date': commit_data['author']['date'],
+                    'hours_from_issue': round(time_diff, 2),
+                    'file_path': file_path,
+                    'commit_url': commit['html_url'],
+                    'owner': owner,
+                    'repo': repo
+                }
+                all_commits.append(row)
+    else:
+        # Get all commits in the time range
+        commits_url = f"https://api.github.com/repos/{owner}/{repo}/commits"
+        params = {
+            'since': since,
+            'until': until,
+            'per_page': 100
+        }
+        
+        logger.info("Getting all commits in time range")
+        response = session.get(commits_url, params=params)
+        response.raise_for_status()
+        commits = response.json()
+        
+        for commit in commits:
+            commit_data = commit['commit']
+            commit_date = datetime.fromisoformat(commit_data['author']['date'].replace('Z', '+00:00'))
+            
+            # Calculate time difference from issue creation
+            time_diff = (commit_date - issue_created_at).total_seconds() / 3600  # hours
+            
+            row = {
+                'issue_number': issue_number,
+                'issue_title': issue['title'],
+                'issue_created_at': issue['created_at'],
+                'issue_state': issue['state'],
+                'commit_sha': commit['sha'],
+                'commit_message': commit_data['message'],
+                'commit_author': commit_data['author']['name'],
+                'commit_date': commit_data['author']['date'],
+                'hours_from_issue': round(time_diff, 2),
+                'file_path': None,  # Will be filled if we fetch commit details
+                'commit_url': commit['html_url'],
+                'owner': owner,
+                'repo': repo
+            }
+            all_commits.append(row)
+    
+    if not all_commits:
+        logger.info("No commits found in the specified time range")
+        return pd.DataFrame(columns=['issue_number', 'issue_title', 'commit_sha', 'commit_message', 'hours_from_issue'])
+    
+    df = pd.DataFrame(all_commits)
+    # Sort by time difference (closest to issue creation first)
+    df = df.sort_values('hours_from_issue', key=abs)
+    
+    logger.info(f"Found {len(df)} commits around issue #{issue_number}")
+    return df
+
+_SHELL.push({
+    "get_commit_details_impl": _get_commit_details_impl,
+    "analyze_file_commits_around_issue_impl": _analyze_file_commits_around_issue_impl
+})
+
+
+@app.tool()
+async def get_commit_details(owner: str, repo: str, commit_sha: str, *, save_as: str) -> Optional[pd.DataFrame]:
+    """
+    Get detailed information about a specific commit, including files changed and diffs.
+    
+    Args:
+        owner (str): Repository owner
+        repo (str): Repository name
+        commit_sha (str): Commit SHA to get details for
+        save_as (str): Variable name to store the commit details
+        
+    Returns:
+        pd.DataFrame: Commit details including file changes and diffs
+    """
+    code = f'{save_as} = get_commit_details_impl("{owner}", "{repo}", "{commit_sha}")\n{save_as}'
+    df = await run_code_in_shell(code)
+    if isinstance(df, pd.DataFrame):
+        return df.to_dict('records')
+
+
+@app.tool()
+async def analyze_file_commits_around_issue(owner: str, repo: str, issue_number: int,
+                                          file_paths: Optional[str] = None,
+                                          days_before: int = 7, days_after: int = 1, 
+                                          *, save_as: str) -> Optional[pd.DataFrame]:
+    """
+    Analyze commits to specific files around the time an issue was created.
+    This helps identify what file changes might be responsible for an issue.
+    
+    Args:
+        owner (str): Repository owner
+        repo (str): Repository name
+        issue_number (int): Issue number to analyze
+        file_paths (Optional[str]): Comma-separated list of file paths to analyze (if None, gets all commits)
+        days_before (int): Number of days before issue creation to look for commits
+        days_after (int): Number of days after issue creation to look for commits
+        save_as (str): Variable name to store the analysis results
+        
+    Returns:
+        pd.DataFrame: Commits around issue creation time with correlation analysis
+    """
+    file_paths_list = None
+    if file_paths:
+        file_paths_list = [path.strip() for path in file_paths.split(',')]
+    
+    code = f'{save_as} = analyze_file_commits_around_issue_impl("{owner}", "{repo}", {issue_number}'
+    if file_paths_list:
+        code += f', {file_paths_list}'
+    else:
+        code += ', None'
+    code += f', {days_before}, {days_after})\n{save_as}'
+    
+    df = await run_code_in_shell(code)
+    if isinstance(df, pd.DataFrame):
         return df.to_dict('records') 

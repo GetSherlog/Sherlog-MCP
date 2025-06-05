@@ -16,6 +16,7 @@ from . import filesystem_tools
 from . import grafana_tools
 from . import github_tools
 from . import s3_tools
+from . import cloudwatch_tools
 from . import code_retrieval
 
 # MCP tools are imported directly in server.py to avoid circular imports
@@ -32,6 +33,7 @@ __all__ = [
     "grafana_tools",
     "github_tools",
     "s3_tools",
+    "cloudwatch_tools",
     "code_retrieval",
 ]
 
@@ -64,6 +66,17 @@ from .github_tools import (
     get_pull_request_comments,
     get_pull_request_reviews,
     list_commits,
+)
+from .cloudwatch_tools import (
+    list_log_groups,
+    list_log_streams,
+    query_logs,
+    get_log_events,
+    list_metrics,
+    get_metric_statistics,
+    list_alarms,
+    get_alarm_history,
+    put_metric_data,
 )
 from .code_retrieval import (
     find_method_implementation,

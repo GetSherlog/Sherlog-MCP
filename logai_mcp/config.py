@@ -78,6 +78,19 @@ class Settings(BaseSettings): # type: ignore[misc]
         alias="GRAFANA_API_KEY",
     )
 
+    # MindsDB Configuration
+    mindsdb_url: Optional[str] = Field(
+        default=None,
+        description="Base URL for the MindsDB instance (e.g., http://localhost:47334)",
+        alias="MINDSDB_URL",
+    )
+
+    mindsdb_access_token: Optional[str] = Field(
+        default=None,
+        description="Access token for MindsDB MCP server authentication.",
+        alias="MINDSDB_ACCESS_TOKEN",
+    )
+
     # AWS S3 Configuration
     aws_access_key_id: Optional[str] = Field(
         default=None,

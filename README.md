@@ -83,6 +83,8 @@ This MCP server includes comprehensive GitHub integration, allowing you to inter
 
 ### Commit Tools
 - **list_commits**: List commits in a repository with optional filters
+- **get_commit_details**: Get detailed information about a specific commit, including files changed and diffs
+- **analyze_file_commits_around_issue**: Analyze commits to specific files around the time an issue was created to identify what changes might be responsible
 
 ### Configuration
 
@@ -124,6 +126,18 @@ Search for open issues labeled "bug" in the python/cpython repository
 
 ```
 Get all review comments for pull request #789 in the kubernetes/kubernetes repository
+```
+
+```
+Get detailed information about commit abc123def456 including all file changes and diffs from the microsoft/vscode repository
+```
+
+```
+Analyze commits around issue #456 from the tensorflow/tensorflow repository to see what file changes might have caused the issue. Look 3 days before and 1 day after the issue was created.
+```
+
+```
+Check commits to specific files (src/main.py,tests/test_main.py) around issue #789 from the python/myproject repository to correlate file changes with the reported bug
 ```
 
 ## AWS S3 Integration
@@ -216,6 +230,157 @@ Get detailed information about the object "images/photo.jpg" in bucket "my-media
 
 ```
 Delete the object "temp/old-file.txt" from bucket "my-temp-storage"
+```
+
+## AWS CloudWatch Integration
+
+This MCP server includes comprehensive AWS CloudWatch integration, allowing you to interact with CloudWatch Logs, Metrics, and Alarms directly through Claude. The CloudWatch tools include:
+
+### CloudWatch Logs Tools
+- **list_log_groups**: List all CloudWatch log groups with metadata
+- **list_log_streams**: List log streams in a specific log group
+- **query_logs**: Execute CloudWatch Logs Insights queries for advanced log analysis
+- **get_log_events**: Retrieve log events from specific log groups or streams with filtering
+
+### CloudWatch Metrics Tools
+- **list_metrics**: List available CloudWatch metrics with filtering options
+- **get_metric_statistics**: Get metric statistics and datapoints over time periods
+- **put_metric_data**: Send custom metric data to CloudWatch
+
+### CloudWatch Alarms Tools
+- **list_alarms**: List CloudWatch alarms with state and configuration details
+- **get_alarm_history**: Get alarm history including state changes and actions
+
+### Configuration
+
+CloudWatch tools use the same AWS credentials as S3 tools. Configure using one of these methods:
+
+**Method 1: Environment Variables**
+```bash
+export AWS_ACCESS_KEY_ID="your_access_key_here"
+export AWS_SECRET_ACCESS_KEY="your_secret_key_here"
+export AWS_REGION="us-east-1"  # or your preferred region
+```
+
+**Method 2: AWS CLI Configuration**
+```bash
+aws configure
+```
+
+**Method 3: AWS Credentials File**
+Create `~/.aws/credentials`:
+```ini
+[default]
+aws_access_key_id = your_access_key_here
+aws_secret_access_key = your_secret_key_here
+region = us-east-1
+```
+
+**Method 4: IAM Roles**
+If running on EC2, you can use IAM roles for automatic credential management.
+
+### Required Permissions
+
+Your AWS credentials need the following CloudWatch permissions:
+- `logs:DescribeLogGroups` - List log groups
+- `logs:DescribeLogStreams` - List log streams
+- `logs:GetLogEvents` - Read log events
+- `logs:FilterLogEvents` - Filter log events
+- `logs:StartQuery` - Start CloudWatch Logs Insights queries
+- `logs:GetQueryResults` - Get query results
+- `cloudwatch:ListMetrics` - List available metrics
+- `cloudwatch:GetMetricStatistics` - Get metric data
+- `cloudwatch:PutMetricData` - Send custom metrics
+- `cloudwatch:DescribeAlarms` - List alarms
+- `cloudwatch:DescribeAlarmHistory` - Get alarm history
+
+### Example CloudWatch Usage with Claude
+
+Once configured, you can ask Claude to interact with your CloudWatch monitoring:
+
+**CloudWatch Logs Examples:**
+
+```
+List all my CloudWatch log groups and show which ones have the most activity
+```
+
+```
+Show me the log streams in the "/aws/lambda/my-function" log group
+```
+
+```
+Execute a CloudWatch Logs Insights query to find all ERROR messages in my application logs from the last hour:
+fields @timestamp, @message | filter @message like /ERROR/ | sort @timestamp desc
+```
+
+```
+Get the latest 50 log events from the "/aws/apigateway/welcome" log group containing "404"
+```
+
+**CloudWatch Metrics Examples:**
+
+```
+List all EC2 metrics available in my account
+```
+
+```
+Get CPU utilization statistics for instance i-1234567890abcdef0 over the last 6 hours
+```
+
+```
+Show me Lambda function duration metrics for my "data-processor" function with 5-minute intervals
+```
+
+```
+Send custom application metrics to CloudWatch for my web application response times
+```
+
+**CloudWatch Alarms Examples:**
+
+```
+List all CloudWatch alarms that are currently in ALARM state
+```
+
+```
+Show me the history of the "HighCPUUtilization" alarm for the past 24 hours
+```
+
+```
+Get details of all alarms related to my RDS database instances
+```
+
+**Advanced CloudWatch Analysis Examples:**
+
+```
+Help me investigate a performance issue by:
+1. Listing all alarms that fired in the last 2 hours
+2. Getting related metrics for any alarming resources
+3. Querying application logs for error patterns during the same time period
+4. Correlating the findings to identify root cause
+```
+
+```
+Analyze my application performance by:
+1. Getting Lambda function duration and error rate metrics for the past day
+2. Querying API Gateway logs for 4xx and 5xx responses
+3. Checking for any related CloudWatch alarms
+4. Providing a summary of performance issues and recommendations
+```
+
+```
+Monitor my microservices health by:
+1. Listing all log groups for my application services
+2. Querying each service's logs for error patterns in the last hour
+3. Getting key performance metrics (CPU, memory, response time) for each service
+4. Generating a health report with any issues found
+```
+
+```
+Set up monitoring for a new application by:
+1. Listing current metrics available for my new EC2 instances
+2. Checking what log groups exist for the application
+3. Recommending CloudWatch alarms based on the available metrics
+4. Suggesting custom metrics that should be tracked
 ```
 
 ## Getting Started
@@ -503,6 +668,27 @@ I'm investigating a performance issue in our application. Please help me by:
 3. Checking if there are any open pull requests that might be related to performance
 4. If there are related PRs, get the files changed to understand the scope of modifications
 5. Combine this with LogAI analysis - can you run anomaly detection on our recent application logs to correlate with the code changes?
+```
+
+### Issue-to-Code Correlation Analysis (Your Specific Use Case!)
+
+```
+I have a bug report (issue #456) and want to identify what recent code changes might be responsible. Please help me by:
+1. Get the details of issue #456 from owner/myrepo to understand when it was reported and what the problem is
+2. Use analyze_file_commits_around_issue to find all commits made 7 days before and 1 day after the issue was created
+3. For any suspicious commits found, use get_commit_details to see exactly what files were changed and the diffs
+4. If the issue mentions specific files or components, re-run the analysis focusing only on those files
+5. Show me the timeline correlation: issue creation date vs recent commits to help identify the root cause
+6. Provide a summary of which commits are most likely responsible and why
+```
+
+```
+I suspect a recent change to our authentication system caused login issues (issue #789). Can you:
+1. Get issue #789 details to see exactly when users started reporting problems
+2. Analyze commits around that time specifically for files matching: auth.py,login.py,session.py
+3. Get detailed diffs for any commits that modified these authentication-related files
+4. Show me the timeline: when was the issue reported vs when were the auth files last modified
+5. Help me determine if there's a clear correlation between the code changes and the reported issue
 ```
 
 ### Comprehensive Development Workflow Analysis
