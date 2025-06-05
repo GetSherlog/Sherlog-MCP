@@ -1,6 +1,56 @@
 # LogAI MCP Server
 
-This project exposes [LogAI](https://github.com/salesforce/logai) functionality as an MCP (Model Context Protocol) server for use with Claude desktop.
+This project exposes [LogAI](https://github.com/salesforce/logai) functionality as an MCP (Model Context Protocol) server for use with AI-powered investigation platforms like [Sherlog Canvas](https://github.com/GetSherlog/Canvas) and Claude Desktop.
+
+## 🔥 Sherlog Canvas Integration
+
+**This MCP server is specifically designed to work as the primary data analysis engine for [Sherlog Canvas](https://github.com/GetSherlog/Canvas)** - an AI-powered notebook interface for investigations.
+
+### Quick Start for Sherlog Canvas
+
+1. **Start the LogAI MCP server:**
+   ```bash
+   python logai_mcp_server.py
+   ```
+   
+   This starts the server with:
+   - **Streamable HTTP transport** for web compatibility
+   - **Port 8000** by default (configurable)
+   - **Stateless HTTP mode** for multi-node deployments
+
+2. **Add to Sherlog Canvas:**
+   - Open Sherlog Canvas data connections
+   - Add new MCP server connection:
+     - **URL**: `http://localhost:8000`
+     - **Transport**: `streamable-http`
+     - **Name**: `LogAI Analytics`
+
+3. **Start investigating!** Ask Sherlog Canvas to:
+   - "Analyze logs for anomalies in the payment service"
+   - "Cluster similar error messages from the last hour"
+   - "Query Prometheus metrics for CPU usage spikes"
+   - "Search GitHub issues related to authentication failures"
+
+### Why Streamable HTTP Transport?
+
+Unlike stdio transport (used for Claude Desktop), **streamable HTTP transport is essential for web applications** because:
+- ✅ **HTTP-based**: Compatible with web backends
+- ✅ **REST API compatible**: Works with standard HTTP clients
+- ✅ **Firewall-friendly**: Uses standard HTTP ports
+- ✅ **Scalable**: Stateless mode supports multiple instances
+
+### Available Analysis Capabilities
+
+When integrated with Sherlog Canvas, you get access to:
+
+- 🤖 **AI-Powered Log Analysis** (LogAI algorithms)
+- 📊 **Grafana & Prometheus Integration**
+- 🐙 **GitHub Repository Analysis**
+- ☁️ **AWS CloudWatch & S3 Operations**
+- 🚨 **Sentry Error Tracking**
+- 📈 **Mixpanel Analytics**
+- 🐳 **Docker Container Management**
+- 📁 **File System Operations**
 
 ## What is LogAI?
 
@@ -138,548 +188,6 @@ Analyze commits around issue #456 from the tensorflow/tensorflow repository to s
 
 ```
 Check commits to specific files (src/main.py,tests/test_main.py) around issue #789 from the python/myproject repository to correlate file changes with the reported bug
-```
-
-## AWS S3 Integration
-
-This MCP server includes comprehensive AWS S3 integration, allowing you to interact with Amazon S3 buckets and objects directly through Claude. The S3 tools include:
-
-### Bucket Operations
-- **list_s3_buckets**: List all S3 buckets in your AWS account
-- **create_s3_bucket**: Create new S3 buckets with regional configuration
-- **delete_s3_bucket**: Delete S3 buckets (with optional force delete of all contents)
-
-### Object Operations
-- **list_s3_objects**: List objects in S3 buckets with prefix filtering
-- **upload_s3_object**: Upload files to S3 with automatic content type detection
-- **download_s3_object**: Download objects from S3 to local storage
-- **delete_s3_object**: Delete specific objects from S3 buckets
-- **get_s3_object_info**: Get detailed metadata about S3 objects
-- **read_s3_object_content**: Read text content from S3 objects (with size limits for safety)
-
-### Configuration
-
-To use the S3 tools, you need to configure AWS credentials using one of these methods:
-
-**Method 1: Environment Variables**
-```bash
-export AWS_ACCESS_KEY_ID="your_access_key_here"
-export AWS_SECRET_ACCESS_KEY="your_secret_key_here"
-export AWS_REGION="us-east-1"  # or your preferred region
-```
-
-**Method 2: AWS CLI Configuration**
-```bash
-aws configure
-```
-
-**Method 3: AWS Credentials File**
-Create `~/.aws/credentials`:
-```ini
-[default]
-aws_access_key_id = your_access_key_here
-aws_secret_access_key = your_secret_key_here
-region = us-east-1
-```
-
-**Method 4: IAM Roles**
-If running on EC2, you can use IAM roles for automatic credential management.
-
-### Required Permissions
-
-Your AWS credentials need the following S3 permissions:
-- `s3:ListBucket` - List bucket contents
-- `s3:GetObject` - Download/read objects
-- `s3:PutObject` - Upload objects  
-- `s3:DeleteObject` - Delete objects
-- `s3:CreateBucket` - Create buckets
-- `s3:DeleteBucket` - Delete buckets
-- `s3:ListAllMyBuckets` - List all buckets
-
-### Example S3 Usage with Claude
-
-Once configured, you can ask Claude to interact with your S3 storage:
-
-```
-List all my S3 buckets and show their creation dates
-```
-
-```
-Create a new S3 bucket called "my-data-bucket" in us-west-2 region
-```
-
-```
-Upload the file "/tmp/logfile.txt" to bucket "my-logs" with key "2024/01/logfile.txt"
-```
-
-```
-List all objects in bucket "my-data" that start with "logs/"
-```
-
-```
-Download the object "data/report.csv" from bucket "my-reports" to "/tmp/report.csv"
-```
-
-```
-Read the content of the small text file "config/settings.txt" from bucket "my-config"
-```
-
-```
-Get detailed information about the object "images/photo.jpg" in bucket "my-media"
-```
-
-```
-Delete the object "temp/old-file.txt" from bucket "my-temp-storage"
-```
-
-## AWS CloudWatch Integration
-
-This MCP server includes comprehensive AWS CloudWatch integration, allowing you to interact with CloudWatch Logs, Metrics, and Alarms directly through Claude. The CloudWatch tools include:
-
-### CloudWatch Logs Tools
-- **list_log_groups**: List all CloudWatch log groups with metadata
-- **list_log_streams**: List log streams in a specific log group
-- **query_logs**: Execute CloudWatch Logs Insights queries for advanced log analysis
-- **get_log_events**: Retrieve log events from specific log groups or streams with filtering
-
-### CloudWatch Metrics Tools
-- **list_metrics**: List available CloudWatch metrics with filtering options
-- **get_metric_statistics**: Get metric statistics and datapoints over time periods
-- **put_metric_data**: Send custom metric data to CloudWatch
-
-### CloudWatch Alarms Tools
-- **list_alarms**: List CloudWatch alarms with state and configuration details
-- **get_alarm_history**: Get alarm history including state changes and actions
-
-### Configuration
-
-CloudWatch tools use the same AWS credentials as S3 tools. Configure using one of these methods:
-
-**Method 1: Environment Variables**
-```bash
-export AWS_ACCESS_KEY_ID="your_access_key_here"
-export AWS_SECRET_ACCESS_KEY="your_secret_key_here"
-export AWS_REGION="us-east-1"  # or your preferred region
-```
-
-**Method 2: AWS CLI Configuration**
-```bash
-aws configure
-```
-
-**Method 3: AWS Credentials File**
-Create `~/.aws/credentials`:
-```ini
-[default]
-aws_access_key_id = your_access_key_here
-aws_secret_access_key = your_secret_key_here
-region = us-east-1
-```
-
-**Method 4: IAM Roles**
-If running on EC2, you can use IAM roles for automatic credential management.
-
-### Required Permissions
-
-Your AWS credentials need the following CloudWatch permissions:
-- `logs:DescribeLogGroups` - List log groups
-- `logs:DescribeLogStreams` - List log streams
-- `logs:GetLogEvents` - Read log events
-- `logs:FilterLogEvents` - Filter log events
-- `logs:StartQuery` - Start CloudWatch Logs Insights queries
-- `logs:GetQueryResults` - Get query results
-- `cloudwatch:ListMetrics` - List available metrics
-- `cloudwatch:GetMetricStatistics` - Get metric data
-- `cloudwatch:PutMetricData` - Send custom metrics
-- `cloudwatch:DescribeAlarms` - List alarms
-- `cloudwatch:DescribeAlarmHistory` - Get alarm history
-
-### Example CloudWatch Usage with Claude
-
-Once configured, you can ask Claude to interact with your CloudWatch monitoring:
-
-**CloudWatch Logs Examples:**
-
-```
-List all my CloudWatch log groups and show which ones have the most activity
-```
-
-```
-Show me the log streams in the "/aws/lambda/my-function" log group
-```
-
-```
-Execute a CloudWatch Logs Insights query to find all ERROR messages in my application logs from the last hour:
-fields @timestamp, @message | filter @message like /ERROR/ | sort @timestamp desc
-```
-
-```
-Get the latest 50 log events from the "/aws/apigateway/welcome" log group containing "404"
-```
-
-**CloudWatch Metrics Examples:**
-
-```
-List all EC2 metrics available in my account
-```
-
-```
-Get CPU utilization statistics for instance i-1234567890abcdef0 over the last 6 hours
-```
-
-```
-Show me Lambda function duration metrics for my "data-processor" function with 5-minute intervals
-```
-
-```
-Send custom application metrics to CloudWatch for my web application response times
-```
-
-**CloudWatch Alarms Examples:**
-
-```
-List all CloudWatch alarms that are currently in ALARM state
-```
-
-```
-Show me the history of the "HighCPUUtilization" alarm for the past 24 hours
-```
-
-```
-Get details of all alarms related to my RDS database instances
-```
-
-**Advanced CloudWatch Analysis Examples:**
-
-```
-Help me investigate a performance issue by:
-1. Listing all alarms that fired in the last 2 hours
-2. Getting related metrics for any alarming resources
-3. Querying application logs for error patterns during the same time period
-4. Correlating the findings to identify root cause
-```
-
-```
-Analyze my application performance by:
-1. Getting Lambda function duration and error rate metrics for the past day
-2. Querying API Gateway logs for 4xx and 5xx responses
-3. Checking for any related CloudWatch alarms
-4. Providing a summary of performance issues and recommendations
-```
-
-```
-Monitor my microservices health by:
-1. Listing all log groups for my application services
-2. Querying each service's logs for error patterns in the last hour
-3. Getting key performance metrics (CPU, memory, response time) for each service
-4. Generating a health report with any issues found
-```
-
-```
-Set up monitoring for a new application by:
-1. Listing current metrics available for my new EC2 instances
-2. Checking what log groups exist for the application
-3. Recommending CloudWatch alarms based on the available metrics
-4. Suggesting custom metrics that should be tracked
-```
-
-## Getting Started
-
-### Prerequisites
-
-- Python 3.10+
-- Claude desktop app (latest version)
-- LogAI dependencies
-- FastMCP and MCP SDK
-
-### Installation
-
-1. Clone this repository:
-
-```bash
-git clone https://github.com/yourusername/sherlog-log-ai-mcp.git
-cd sherlog-log-ai-mcp
-```
-
-2. Create a virtual environment:
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-3. Install required packages:
-
-```bash
-# Install MCP packages
-pip install mcp fastmcp
-
-# Install core dependencies
-pip install scikit-learn pandas numpy nltk Cython
-
-# Install LogAI (development mode)
-pip install -e ./logai
-```
-
-4. If you encounter any issues with the LogAI installation, try installing optional dependencies:
-
-```bash
-# Install full dependencies
-pip install "logai[all]"
-
-# Download NLTK data
-python -m nltk.downloader punkt
-```
-
-## Running the Server
-
-Start the LogAI MCP server:
-
-```bash
-python logai_mcp_server.py
-```
-
-The server will be available at http://localhost:8080.
-
-You can test if the server is working properly using the included test script:
-
-```bash
-python test_logai_mcp.py
-```
-
-## Installing the Server in Claude Desktop
-
-### Method 1: Using the MCP CLI
-
-1. Install the MCP command-line tool (if not already installed):
-
-```bash
-pip install mcp
-```
-
-2. Make sure your LogAI MCP server is running locally.
-
-3. Install the server in Claude desktop:
-
-```bash
-mcp install logai_mcp_server.py --name "LogAI Analytics"
-```
-
-### Method 2: Manual Installation in Claude Desktop
-
-1. Make sure your LogAI MCP server is running locally.
-
-2. Open Claude desktop application.
-
-3. Click on your profile picture in the bottom-left corner to open settings.
-
-4. Select "MCP Servers" from the settings menu.
-
-5. Click the "Add Server" button.
-
-6. Enter the following details:
-   - Name: LogAI Analytics
-   - URL: http://localhost:8080
-   - (No authentication required for local development)
-
-7. Click "Add Server" to save.
-
-## Using LogAI with Claude Desktop
-
-Once the LogAI MCP server is installed, you can interact with it through Claude using natural language. Here are some examples:
-
-### Listing Available Resources
-
-Ask Claude about the available datasets or algorithms:
-
-```
-What log datasets are available in LogAI?
-```
-
-```
-What anomaly detection algorithms are available in LogAI?
-```
-
-Claude will use the MCP server to retrieve and display this information.
-
-### Running Anomaly Detection
-
-Ask Claude to perform anomaly detection on a sample dataset:
-
-```
-Can you run anomaly detection on the HDFS_2000 dataset using the isolation_forest algorithm?
-```
-
-```
-I'd like to analyze the BGL_5000 log dataset for anomalies using one_class_svm.
-```
-
-You can specify parameters:
-
-```
-Please run anomaly detection on HealthApp_2000 with the following settings:
-- Parser: drain
-- Vectorizer: tfidf
-- Anomaly detector: isolation_forest
-```
-
-### Running Log Clustering
-
-Ask Claude to cluster log data:
-
-```
-Can you cluster the HDFS_5000 logs into 5 groups using kmeans?
-```
-
-```
-I'd like to see the log patterns in BGL_2000 clustered using dbscan.
-```
-
-### Analyzing Custom Logs
-
-You can upload your own log files for analysis:
-
-1. Prepare a log file on your computer.
-
-2. Ask Claude to analyze it:
-
-```
-I have some server logs I'd like to analyze for anomalies. Can you help me?
-```
-
-3. Claude will prompt you to upload your file.
-
-4. After uploading, specify the analysis type:
-
-```
-Please use the drain parser and one_class_svm detector to find anomalies in these logs.
-```
-
-### Advanced Usage
-
-You can customize algorithm parameters:
-
-```
-Run anomaly detection on HDFS_2000 with the following configuration:
-- Parser: drain with similarity threshold 0.6
-- Use word2vec vectorization
-- Apply isolation_forest with 100 estimators and auto contamination
-```
-
-## Troubleshooting
-
-### Server Connection Issues
-
-If Claude can't connect to your LogAI MCP server:
-
-1. Ensure the server is running (http://localhost:8080)
-2. Check if the test script (`test_logai_mcp.py`) works properly
-3. Verify the server is correctly installed in Claude desktop
-4. Try restarting Claude desktop
-
-### LogAI Installation Issues
-
-If you have issues installing LogAI dependencies:
-
-1. Make sure your Python version is compatible (3.10+)
-2. Try installing dependencies individually:
-   ```bash
-   pip install schema salesforce-merlion Cython nltk gensim scikit-learn pandas numpy spacy
-   ```
-3. Check the LogAI documentation for specific environment requirements
-
-### Claude Can't Find Tools or Resources
-
-If Claude doesn't recognize the LogAI tools:
-
-1. Make sure Claude recognizes the server is installed (ask "What MCP servers do I have installed?")
-2. Try explicitly asking Claude to use the LogAI server (e.g., "Use LogAI Analytics to...")
-3. Restart the conversation with Claude
-
-## Example Prompts for Claude
-
-Here are some complete example prompts to get you started:
-
-### Basic Anomaly Detection
-
-```
-Using the LogAI Analytics MCP server, could you perform anomaly detection on the HDFS_2000 dataset? Please use the drain parser and one_class_svm detector. After running the analysis, explain what anomalies were found and what they might indicate about the system's health.
-```
-
-### Advanced Clustering Analysis
-
-```
-I'd like to understand the different types of logs in the BGL_5000 dataset. Using the LogAI Analytics server, please:
-1. Run log clustering with 7 clusters using kmeans
-2. Show me samples from each cluster
-3. Analyze what each cluster might represent in terms of system behavior or events
-4. Recommend which clusters might be worth investigating further
-```
-
-### Custom Log Analysis Workflow
-
-```
-I have some web server logs I need to analyze. I suspect there might be some unusual patterns that could indicate potential security issues. I'd like to:
-
-1. First upload my logs for analysis
-2. Run both clustering (to see the main patterns) and anomaly detection
-3. Compare the results of different anomaly detection algorithms
-4. Get recommendations on what the anomalies might indicate
-
-Can you guide me through this process using the LogAI Analytics server?
-```
-
-### Grafana Monitoring and Metrics Analysis
-
-```
-I need to analyze the performance of my web application. Please use the Grafana tools to:
-1. Query my Prometheus datasource (UID: "prometheus-main") for HTTP request rate over the last hour: rate(http_requests_total[5m])
-2. Check for any error rate spikes: rate(http_requests_total{status=~"5.."}[5m])
-3. Analyze the results and tell me if there are any concerning patterns
-```
-
-### Log Analysis with Grafana Loki
-
-```
-I'm investigating an incident that occurred between 2024-01-15T10:00:00Z and 2024-01-15T11:00:00Z. Using my Loki datasource (UID: "loki-main"), please:
-1. Query for all error logs during that time: {job="webapp"} |= "ERROR"
-2. Get statistics about the log streams for that period
-3. List the most common error patterns
-4. Help me understand what might have caused the incident
-```
-
-### Infrastructure Monitoring Deep Dive
-
-```
-I want to do a comprehensive health check of my infrastructure. Please help me by:
-1. Getting all available Prometheus metric names from datasource "prometheus-infrastructure"
-2. Querying CPU usage across all hosts: avg by (instance) (rate(cpu_usage_total[5m]))
-3. Checking memory usage: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100
-4. Looking at disk usage: df_bytes{mountpoint="/"} / df_size_bytes{mountpoint="/"} * 100
-5. Analyzing the results to identify any systems that need attention
-```
-
-### GitHub Repository Analysis and Issue Investigation
-
-```
-I'm investigating a performance issue in our application. Please help me by:
-1. Getting issue #234 from our main repository owner/myapp
-2. Listing recent commits from the last 48 hours to see what might have caused the issue: since="2024-01-15T00:00:00Z"
-3. Checking if there are any open pull requests that might be related to performance
-4. If there are related PRs, get the files changed to understand the scope of modifications
-5. Combine this with LogAI analysis - can you run anomaly detection on our recent application logs to correlate with the code changes?
-```
-
-### Issue-to-Code Correlation Analysis (Your Specific Use Case!)
-
-```
-I have a bug report (issue #456) and want to identify what recent code changes might be responsible. Please help me by:
-1. Get the details of issue #456 from owner/myrepo to understand when it was reported and what the problem is
-2. Use analyze_file_commits_around_issue to find all commits made 7 days before and 1 day after the issue was created
-3. For any suspicious commits found, use get_commit_details to see exactly what files were changed and the diffs
-4. If the issue mentions specific files or components, re-run the analysis focusing only on those files
-5. Show me the timeline correlation: issue creation date vs recent commits to help identify the root cause
-6. Provide a summary of which commits are most likely responsible and why
 ```
 
 ```

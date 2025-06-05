@@ -18,7 +18,9 @@ import nltk.downloader
 from mcp.server.fastmcp import FastMCP
 from logai_mcp.config import get_settings
 
-app = FastMCP(name="LogAIMCP")
+# Configure FastMCP for Sherlog Canvas web application usage
+# stateless_http=True makes it suitable for multi-node deployments
+app = FastMCP(name="LogAIMCP", stateless_http=True)
 
 for _resource in [
     "tokenizers/punkt",

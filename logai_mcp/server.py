@@ -30,8 +30,9 @@ def main():
     from logai_mcp.session import restore_session
     restore_session()
     
-    # FastMCP runs on stdio transport by default
-    app.run()
+    # Use streamable-http transport for Sherlog Canvas integration
+    logger.info("Starting MCP server with streamable-http transport for web applications")
+    app.run(transport="streamable-http")
 
 
 if __name__ == "__main__":
