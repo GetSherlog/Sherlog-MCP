@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "google-sheets": {
+      "command": "uvx",
+      "args": ["mcp-google-sheets@latest"],
+      "env": {
+        "SERVICE_ACCOUNT_PATH": "/app/omni-search-461723-0910b1ccae43.json",
+        "DRIVE_FOLDER_ID": "1xlNdWFfQjb4pyvK3WLD2Xp0Lxt8SSMlk"
+      }
+    }
+  }
+}

@@ -16,15 +16,20 @@ COPY logai_mcp_server.py ./
 
 RUN uv pip install --system .
 
+# Download NLTK data during build to avoid runtime issues
+RUN python -m nltk.downloader punkt wordnet averaged_perceptron_tagger
+
 FROM python:3.11-slim-bookworm AS runtime
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         git \
         ca-certificates \
+        curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local /usr/local
+COPY --from=builder /root/nltk_data /root/nltk_data
 
 WORKDIR /app
 COPY logai_mcp ./logai_mcp

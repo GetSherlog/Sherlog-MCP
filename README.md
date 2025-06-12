@@ -343,6 +343,114 @@ Set up a security-focused log analysis using S3 and LogAI:
 8. Provide actionable security recommendations based on the analysis
 ```
 
+## External MCP Integration
+
+This MCP server can dynamically integrate with any other MCP server, making their tools available as native LogAI tools with automatic DataFrame conversion.
+
+### Configuration
+
+Create an `mcp.json` file (similar to Claude Desktop's configuration):
+
+```json
+{
+  "mcpServers": {
+    "google-sheets": {
+      "command": "uvx",
+      "args": ["mcp-google-sheets@latest"],
+      "env": {
+        "SERVICE_ACCOUNT_PATH": "/path/to/service-account.json"
+      }
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres"],
+      "env": {
+        "DATABASE_URL": "postgresql://user:password@localhost/dbname"
+      }
+    }
+  }
+}
+```
+
+The server looks for `mcp.json` in:
+1. Current working directory
+2. `~/.logai-mcp/mcp.json`
+3. LogAI MCP installation directory
+4. Custom path via `MCP_CONFIG_PATH` environment variable
+
+### How It Works
+
+1. **Automatic Discovery**: On startup, LogAI MCP connects to configured external MCPs and discovers their tools
+2. **Dynamic Registration**: Each external tool is registered with a prefixed name (e.g., `google_sheets_read_sheet_data`)
+3. **DataFrame Integration**: Results are automatically converted to pandas DataFrames when possible
+4. **IPython Shell Storage**: All results are stored in the persistent IPython shell for further analysis
+
+### Example: Google Sheets Integration
+
+```python
+# List available spreadsheets
+google_sheets_list_spreadsheets(save_as="sheets")
+
+# Read data from a spreadsheet
+google_sheets_read_sheet_data(
+    spreadsheet_id="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+    range="Sheet1!A1:E100",
+    save_as="sales_data"
+)
+
+# Now analyze with LogAI tools
+detect_anomalies(sales_data['revenue'], save_as="anomalies")
+cluster_logs(sales_data['descriptions'], save_as="clusters")
+```
+
+### Adding New External MCPs
+
+Simply add new entries to your `mcp.json` file:
+
+```json
+{
+  "mcpServers": {
+    "google-sheets": {
+      "command": "uvx",
+      "args": ["mcp-google-sheets@latest"],
+      "env": {
+        "SERVICE_ACCOUNT_PATH": "/path/to/service-account.json"
+      }
+    },
+    "weather": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-weather"]
+    },
+    "slack": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-slack"],
+      "env": {
+        "SLACK_BOT_TOKEN": "xoxb-your-token",
+        "SLACK_TEAM_ID": "T1234567890"
+      }
+    }
+  }
+}
+```
+
+### Benefits
+
+- **No Code Changes**: Add any MCP server through configuration alone
+- **Unified Workflow**: External data automatically flows into LogAI's analysis pipeline
+- **Type Conversion**: Smart conversion of various data formats to DataFrames
+- **Persistent State**: Results remain in the IPython shell for complex multi-step analysis
+
+### Available External MCPs
+
+Some popular MCP servers you can integrate:
+
+- **Google Sheets**: Spreadsheet operations
+- **PostgreSQL**: Database queries
+- **Weather**: Weather data
+- **GitHub**: Repository operations
+- **Slack**: Message operations
+- And any other MCP server!
+
 ## Contributing
 
 Contributions to improve the LogAI MCP server are welcome! Please follow the standard GitHub pull request process.

@@ -1,7 +1,10 @@
 from functools import lru_cache
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
+import json
+import os
+from pathlib import Path
 
 
 class Settings(BaseSettings): # type: ignore[misc]
@@ -151,16 +154,57 @@ class Settings(BaseSettings): # type: ignore[misc]
 
     supported_languages: List[str] = Field(
         default=["java", "kotlin", "python", "typescript", "javascript", "cpp", "rust"],
-        description="List of programming languages to analyze in the codebase. Supported: java, kotlin, python, typescript, javascript, cpp, rust",
+        description="List of programming languages to analyze in the codebase. "
+                    "Supported: java, kotlin, python, typescript, javascript, cpp, rust",
         alias="SUPPORTED_LANGUAGES",
     )
 
     # Kubernetes Configuration
     kubeconfig_path: Optional[str] = Field(
         default=None,
-        description="Path to the Kubernetes config file. If not provided, will use default kubeconfig or in-cluster config.",
+        description="Path to the Kubernetes config file. "
+                    "If not provided, will use default kubeconfig or in-cluster config.",
         alias="KUBECONFIG_PATH",
     )
+
+    # MCP Configuration File Path
+    mcp_config_path: str = Field(
+        default="mcp.json",
+        description="Path to the MCP configuration file (similar to Claude Desktop's config)",
+        alias="MCP_CONFIG_PATH",
+    )
+    
+    # External MCP Configuration (loaded from mcp.json)
+    external_mcps: Dict[str, Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Configuration for external MCP servers loaded from mcp.json",
+    )
+
+    def load_mcp_config(self) -> Dict[str, Dict[str, Any]]:
+        """Load MCP configuration from mcp.json file."""
+        config_path = Path(self.mcp_config_path)
+
+        # Check multiple locations for mcp.json
+        search_paths = [
+            config_path if config_path.is_absolute() else None,
+            Path.cwd() / config_path,
+            Path.home() / ".logai-mcp" / "mcp.json",
+            Path(__file__).parent.parent / config_path,
+        ]
+
+        for path in search_paths:
+            if path and path.exists():
+                try:
+                    with open(path, 'r') as f:
+                        config = json.load(f)
+                        # Support both "mcpServers" (Claude Desktop style) and direct format
+                        if "mcpServers" in config:
+                            return config["mcpServers"]
+                        return config
+                except Exception as e:
+                    print(f"Error loading MCP config from {path}: {e}")
+
+        return {}
 
     model_config = {
         "env_file": ".env",
@@ -177,5 +221,9 @@ def get_settings() -> Settings:
     the same `Settings` object is reused everywhere, acting as a lightweight
     singleton without the pitfalls of global state.
     """
+    settings = Settings()
 
-    return Settings() 
+    # Load external MCPs from mcp.json
+    settings.external_mcps = settings.load_mcp_config()
+
+    return settings

@@ -22,6 +22,12 @@ from logai_mcp.config import get_settings
 # stateless_http=True makes it suitable for multi-node deployments
 app = FastMCP(name="LogAIMCP", stateless_http=True)
 
+# Add health check endpoint
+@app.custom_route("/health", methods=["GET"])
+async def health_check(request):
+    from starlette.responses import JSONResponse
+    return JSONResponse({"status": "ok", "service": "LogAI MCP"})
+
 for _resource in [
     "tokenizers/punkt",
     "corpora/wordnet",

@@ -7,3 +7,17 @@ __pycache__/
 
 # Env files
 .env
+
+# Test files with sensitive data
+docker-compose.test.yml
+test-results/
+*.test.yml
+*-test.yml
+
+# Credentials and tokens
+*credentials*.json
+*token*.json
+omni-search-*.json
+
+# Log files
+*.log

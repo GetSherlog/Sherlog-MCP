@@ -1,0 +1,17 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install test dependencies
+RUN pip install --no-cache-dir \
+    pytest==7.4.0 \
+    pytest-asyncio==0.21.0 \
+    httpx==0.24.1
+
+# Copy test files
+COPY tests/ /app/tests/
+
+# Create directory for test results
+RUN mkdir -p /app/test-results
+
+CMD ["pytest", "-v", "/app/tests/integration/"]

@@ -1,3 +1,6 @@
+import asyncio
+import logging
+
 from logai_mcp.session import app  # noqa: F401 – side-effect: create singleton & basic tools
 
 # Import all tool sub-modules so their @app.tool() functions register
@@ -16,9 +19,8 @@ from logai_mcp.tools import (
     cloudwatch_tools,
     code_retrieval,
     sentry_tools,
+    external_mcp_tools,  # Import external MCP tools module
 )  # noqa: F401
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,15 @@ def main():
     # Auto-restore previous session
     from logai_mcp.session import restore_session
     restore_session()
+    
+    # Register external MCPs
+    logger.info("Registering external MCP tools...")
+    try:
+        # Run the async registration in a sync context
+        asyncio.run(external_mcp_tools.auto_register_external_mcps())
+        logger.info("External MCP registration complete")
+    except Exception as e:
+        logger.error(f"Failed to register external MCPs: {e}")
     
     # Use streamable-http transport for Sherlog Canvas integration
     logger.info("Starting MCP server with streamable-http transport for web applications")
