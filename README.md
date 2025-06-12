@@ -345,11 +345,146 @@ Set up a security-focused log analysis using S3 and LogAI:
 
 ## External MCP Integration
 
-This MCP server can dynamically integrate with any other MCP server, making their tools available as native LogAI tools with automatic DataFrame conversion.
+LogAI MCP can dynamically integrate with any other MCP server, making their tools available as native LogAI tools with automatic DataFrame conversion. This allows you to combine LogAI's powerful analytics with data from any MCP-compatible source.
 
 ### Configuration
 
-Create an `mcp.json` file (similar to Claude Desktop's configuration):
+Create an `mcp.json` file in your project directory:
+
+```json
+{
+  "mcpServers": {
+    "google-sheets": {
+      "command": "uvx",
+      "args": ["mcp-google-sheets@latest"],
+      "env": {
+        "SERVICE_ACCOUNT_PATH": "/path/to/service-account.json",
+        "DRIVE_FOLDER_ID": "optional-folder-id"
+      }
+    }
+  }
+}
+```
+
+The server looks for `mcp.json` in:
+1. Current working directory
+2. `~/.logai-mcp/mcp.json`
+3. LogAI MCP installation directory
+4. Custom path via `MCP_CONFIG_PATH` environment variable
+
+### How It Works
+
+1. **Automatic Discovery**: On startup, LogAI MCP connects to configured external MCPs and discovers their tools
+2. **Dynamic Registration**: Each external tool is registered with a prefixed name (e.g., `google-sheets_read_sheet_data`)
+3. **DataFrame Integration**: Results are automatically converted to pandas DataFrames when possible
+4. **IPython Shell Storage**: All results are stored in the persistent IPython shell for further analysis
+
+### Complete Google Sheets Setup Example
+
+#### Step 1: Create Google Service Account
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select existing one
+3. Enable Google Sheets API:
+   - Navigate to "APIs & Services" → "Library"
+   - Search for "Google Sheets API"
+   - Click and enable it
+4. Create Service Account:
+   - Go to "IAM & Admin" → "Service Accounts"
+   - Click "Create Service Account"
+   - Give it a name (e.g., "logai-mcp-sheets")
+   - Grant it "Editor" role (or customize permissions)
+   - Click "Create Key" → JSON format
+   - Save the downloaded JSON file securely
+
+#### Step 2: Configure mcp.json
+
+Create `mcp.json` in your LogAI MCP directory:
+
+```json
+{
+  "mcpServers": {
+    "google-sheets": {
+      "command": "uvx",
+      "args": ["mcp-google-sheets@latest"],
+      "env": {
+        "SERVICE_ACCOUNT_PATH": "/absolute/path/to/your-service-account-key.json",
+        "DRIVE_FOLDER_ID": "1xlNdWFfQjb4pyvK3WLD2Xp0Lxt8SSMlk"
+      }
+    }
+  }
+}
+```
+
+**Note**: The `DRIVE_FOLDER_ID` is optional. If provided, it limits access to sheets in that specific folder. You can find the folder ID in the Google Drive URL: `https://drive.google.com/drive/folders/[FOLDER_ID_HERE]`
+
+#### Step 3: Share Sheets with Service Account
+
+For the service account to access your sheets:
+1. Open the Google Sheet you want to access
+2. Click "Share" button
+3. Add the service account email (found in your JSON key file)
+4. Grant "Editor" or "Viewer" permissions
+
+#### Step 4: Using Google Sheets with LogAI
+
+Once configured, the Google Sheets tools are automatically available:
+
+```python
+# List all accessible spreadsheets
+list_external_tools()  # Shows all available Google Sheets tools
+
+# List spreadsheets
+google-sheets_list_spreadsheets(save_as="my_sheets")
+
+# Read data from a specific sheet
+google-sheets_get_sheet_data(
+    spreadsheet_id="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+    range="Sheet1!A1:E100",
+    save_as="sales_data"
+)
+
+# Update cells in a sheet
+google-sheets_update_cells(
+    spreadsheet_id="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+    range="Sheet1!A1",
+    values=[["Updated", "Data"], ["Row", "2"]],
+    save_as="update_result"
+)
+
+# Now combine with LogAI analytics
+detect_anomalies(sales_data, save_as="anomalies")
+cluster_logs(sales_data['descriptions'], save_as="clusters")
+```
+
+### Available Google Sheets Tools
+
+When configured, you'll have access to these Google Sheets operations:
+
+- `google-sheets_list_spreadsheets` - List all accessible spreadsheets
+- `google-sheets_get_spreadsheet` - Get spreadsheet metadata
+- `google-sheets_list_sheets` - List sheets within a spreadsheet
+- `google-sheets_get_sheet_data` - Read data from a sheet
+- `google-sheets_update_cells` - Update cell values
+- `google-sheets_append_data` - Append rows to a sheet
+- `google-sheets_clear_sheet` - Clear sheet data
+- `google-sheets_create_spreadsheet` - Create new spreadsheet
+- `google-sheets_create_sheet` - Add new sheet to spreadsheet
+- `google-sheets_delete_sheet` - Delete a sheet
+- `google-sheets_batch_update` - Perform batch operations
+- And more...
+
+### Troubleshooting Google Sheets Integration
+
+1. **Authentication Error**: Ensure service account JSON path is absolute and file exists
+2. **Permission Denied**: Share the sheet with service account email
+3. **API Not Enabled**: Enable Google Sheets API in Cloud Console
+4. **Tool Not Found**: Check logs for MCP registration errors
+5. **Rate Limits**: Google Sheets API has quotas; implement delays for bulk operations
+
+### Adding Other External MCPs
+
+You can add multiple MCP servers to `mcp.json`:
 
 ```json
 {
@@ -366,55 +501,6 @@ Create an `mcp.json` file (similar to Claude Desktop's configuration):
       "args": ["-y", "@modelcontextprotocol/server-postgres"],
       "env": {
         "DATABASE_URL": "postgresql://user:password@localhost/dbname"
-      }
-    }
-  }
-}
-```
-
-The server looks for `mcp.json` in:
-1. Current working directory
-2. `~/.logai-mcp/mcp.json`
-3. LogAI MCP installation directory
-4. Custom path via `MCP_CONFIG_PATH` environment variable
-
-### How It Works
-
-1. **Automatic Discovery**: On startup, LogAI MCP connects to configured external MCPs and discovers their tools
-2. **Dynamic Registration**: Each external tool is registered with a prefixed name (e.g., `google_sheets_read_sheet_data`)
-3. **DataFrame Integration**: Results are automatically converted to pandas DataFrames when possible
-4. **IPython Shell Storage**: All results are stored in the persistent IPython shell for further analysis
-
-### Example: Google Sheets Integration
-
-```python
-# List available spreadsheets
-google_sheets_list_spreadsheets(save_as="sheets")
-
-# Read data from a spreadsheet
-google_sheets_read_sheet_data(
-    spreadsheet_id="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
-    range="Sheet1!A1:E100",
-    save_as="sales_data"
-)
-
-# Now analyze with LogAI tools
-detect_anomalies(sales_data['revenue'], save_as="anomalies")
-cluster_logs(sales_data['descriptions'], save_as="clusters")
-```
-
-### Adding New External MCPs
-
-Simply add new entries to your `mcp.json` file:
-
-```json
-{
-  "mcpServers": {
-    "google-sheets": {
-      "command": "uvx",
-      "args": ["mcp-google-sheets@latest"],
-      "env": {
-        "SERVICE_ACCOUNT_PATH": "/path/to/service-account.json"
       }
     },
     "weather": {
@@ -439,17 +525,22 @@ Simply add new entries to your `mcp.json` file:
 - **Unified Workflow**: External data automatically flows into LogAI's analysis pipeline
 - **Type Conversion**: Smart conversion of various data formats to DataFrames
 - **Persistent State**: Results remain in the IPython shell for complex multi-step analysis
+- **Tool Namespacing**: External tools are prefixed to avoid conflicts
 
-### Available External MCPs
+### Popular External MCPs
 
 Some popular MCP servers you can integrate:
 
-- **Google Sheets**: Spreadsheet operations
-- **PostgreSQL**: Database queries
-- **Weather**: Weather data
-- **GitHub**: Repository operations
-- **Slack**: Message operations
-- And any other MCP server!
+- **Google Sheets**: Spreadsheet operations and data analysis
+- **PostgreSQL**: Database queries and management
+- **SQLite**: Local database operations
+- **Weather**: Real-time weather data
+- **GitHub**: Repository operations (different from built-in tools)
+- **Slack**: Message and channel operations
+- **Filesystem**: Advanced file operations
+- **Time**: Time and timezone utilities
+- **Fetch**: HTTP requests and web scraping
+- And any other MCP-compatible server!
 
 ## Contributing
 
