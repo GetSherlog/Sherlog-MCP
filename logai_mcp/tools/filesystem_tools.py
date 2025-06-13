@@ -23,7 +23,11 @@ import pandas as pd
 from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 from logai_mcp.session import app
 
+# Initialize ALLOWED_DIRECTORIES from environment variable
 ALLOWED_DIRECTORIES: List[str] = []
+_allowed_dirs_env = os.environ.get('ALLOWED_DIRECTORIES', '')
+if _allowed_dirs_env:
+    ALLOWED_DIRECTORIES = [d.strip() for d in _allowed_dirs_env.split(',') if d.strip()]
 
 def expand_home(filepath: str) -> str:
     """

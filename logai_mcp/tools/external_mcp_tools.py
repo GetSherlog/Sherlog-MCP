@@ -133,7 +133,7 @@ def register_external_tool(mcp_name: str, tool_info: types.Tool, mcp_config: Dic
         mcp_config: Configuration for connecting to the MCP
     """
     # Generate unique tool name
-    full_tool_name = f"{mcp_name}_{tool_info.name}"
+    full_tool_name = f"external_{mcp_name}_{tool_info.name}"
     
     logger.debug(f"Registering tool: {full_tool_name}")
     
