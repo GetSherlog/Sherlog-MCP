@@ -6,7 +6,8 @@ WORKDIR /app
 RUN pip install --no-cache-dir \
     pytest==7.4.0 \
     pytest-asyncio==0.21.0 \
-    httpx==0.24.1
+    httpx==0.24.1 \
+    mcp==1.9.4
 
 # Copy test files
 COPY tests/ /app/tests/
