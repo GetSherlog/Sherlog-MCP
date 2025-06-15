@@ -10,6 +10,7 @@ from typing import Optional, Dict, Any, List
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 import pandas as pd
+from logai_mcp.dataframe_utils import smart_create_dataframe, to_pandas
 from datetime import datetime
 
 from logai_mcp.session import app, logger
@@ -22,12 +23,10 @@ def _get_k8s_client():
     try:
         settings = get_settings()
         
-        # Try to load kubeconfig from custom path if provided
         if hasattr(settings, 'kubeconfig_path') and settings.kubeconfig_path:
             config.load_kube_config(config_file=settings.kubeconfig_path)
             logger.info(f"Loaded kubeconfig from: {settings.kubeconfig_path}")
         else:
-            # Try in-cluster config first, then default kubeconfig
             try:
                 config.load_incluster_config()
                 logger.info("Using in-cluster Kubernetes configuration")
@@ -35,11 +34,9 @@ def _get_k8s_client():
                 config.load_kube_config()
                 logger.info("Using default kubeconfig from ~/.kube/config")
         
-        # Return commonly used clients
         v1 = client.CoreV1Api()
         apps_v1 = client.AppsV1Api()
         
-        # Test the connection
         v1.list_namespace(limit=1)
         logger.info("Successfully connected to Kubernetes cluster")
         
@@ -162,7 +159,9 @@ def _list_pods_impl(namespace: str = "default", label_selector: Optional[str] = 
             rows.append(row)
         
         logger.info(f"Retrieved {len(rows)} pods")
-        return pd.DataFrame(rows)
+        # Use smart DataFrame creation for better performance with polars when available
+        df = smart_create_dataframe(rows, prefer_polars=True)
+        return to_pandas(df)
         
     except ApiException as e:
         logger.error(f"Kubernetes API error: {e}")

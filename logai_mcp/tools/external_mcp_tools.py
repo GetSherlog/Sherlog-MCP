@@ -17,6 +17,9 @@ from mcp.client.stdio import stdio_client
 from logai_mcp.session import app, logger
 from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 from logai_mcp.config import get_settings
+from logai_mcp.dataframe_utils import (
+    smart_create_dataframe
+)
 
 
 # Store registered external tools info for documentation
@@ -73,7 +76,6 @@ async def register_mcp_tools(mcp_name: str, mcp_config: Dict[str, Any]):
                         logger.warning(f"Environment variable {env_var} not set for {mcp_name}")
                     env[key] = env_value
                 else:
-                    # Direct value from mcp.json
                     env[key] = value
             else:
                 env[key] = str(value)
@@ -86,10 +88,8 @@ async def register_mcp_tools(mcp_name: str, mcp_config: Dict[str, Any]):
     )
     
     try:
-        # Use stdio_client for connection
         async with stdio_client(stdio_params) as (read, write):
             async with ClientSession(read, write) as session:
-                # Initialize the connection with timeout
                 try:
                     await asyncio.wait_for(session.initialize(), timeout=30.0)
                 except asyncio.TimeoutError:
@@ -104,10 +104,8 @@ async def register_mcp_tools(mcp_name: str, mcp_config: Dict[str, Any]):
                 
                 logger.info(f"Found {len(tools)} tools in {mcp_name}")
                 
-                # Store tools info for registry
                 EXTERNAL_TOOLS_REGISTRY[mcp_name] = {}
                 
-                # Register each tool
                 registered_count = 0
                 for tool in tools:
                     try:
@@ -233,7 +231,7 @@ def generate_tool_execution_code(
                     env_var = value[2:-1]
                     env_setup += f"env['{key}'] = os.environ.get('{env_var}', '')\n"
                 else:
-                    # Direct value from mcp.json
+                    # Direct value from configuration
                     env_setup += f"env['{key}'] = {repr(value)}\n"
             else:
                 env_setup += f"env['{key}'] = {repr(str(value))}\n"
@@ -322,80 +320,25 @@ if isinstance({save_as}, pd.DataFrame):
 
 
 def convert_to_dataframe(data: Any) -> Union[pd.DataFrame, Any]:
-    """Convert various data formats to pandas DataFrame when possible.
+    """Convert various data formats to DataFrame (polars preferred, pandas fallback).
+    
+    This function now uses polars for better performance when available,
+    falling back to pandas for compatibility. The result may be either
+    a polars or pandas DataFrame depending on availability and success.
     
     Args:
         data: Input data in various formats
         
     Returns:
-        DataFrame if conversion successful, original data otherwise
+        DataFrame: Polars DataFrame if available, otherwise pandas DataFrame
     """
-    if data is None:
-        return pd.DataFrame()
-    
-    # Already a DataFrame
-    if isinstance(data, pd.DataFrame):
+    # Use the smart DataFrame creation from our compatibility layer
+    try:
+        df = smart_create_dataframe(data, prefer_polars=True)
+        return df
+    except Exception as e:
+        logger.warning(f"DataFrame conversion failed: {e}, returning original data")
         return data
-    
-    # List of dictionaries (most common case)
-    if isinstance(data, list) and len(data) > 0:
-        if all(isinstance(item, dict) for item in data):
-            return pd.DataFrame(data)
-        # List of lists with potential header
-        elif all(isinstance(item, list) for item in data):
-            # Assume first row might be headers
-            if len(data) > 1:
-                try:
-                    # Try with first row as header
-                    df = pd.DataFrame(data[1:], columns=data[0])
-                    return df
-                except:
-                    # Fall back to no header
-                    return pd.DataFrame(data)
-            else:
-                return pd.DataFrame(data)
-    
-    # Dictionary with list values (column-oriented data)
-    if isinstance(data, dict):
-        # Check if all values are lists of same length
-        if all(isinstance(v, list) for v in data.values()):
-            lengths = [len(v) for v in data.values()]
-            if len(set(lengths)) == 1:  # All same length
-                return pd.DataFrame(data)
-        
-        # Single row dictionary
-        if all(not isinstance(v, (list, dict)) for v in data.values()):
-            return pd.DataFrame([data])
-        
-        # Nested structure - try to normalize
-        try:
-            return pd.json_normalize(data)
-        except:
-            pass
-    
-    # NumPy array
-    if isinstance(data, np.ndarray):
-        return pd.DataFrame(data)
-    
-    # String that might be CSV or JSON
-    if isinstance(data, str):
-        # Try JSON first
-        try:
-            import json
-            json_data = json.loads(data)
-            return convert_to_dataframe(json_data)  # Recursive call
-        except:
-            pass
-        
-        # Try CSV
-        try:
-            from io import StringIO
-            return pd.read_csv(StringIO(data))
-        except:
-            pass
-    
-    # If all else fails, return original data
-    return data
 
 
 # Push conversion function to IPython shell

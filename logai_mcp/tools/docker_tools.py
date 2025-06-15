@@ -1,6 +1,7 @@
 from typing import Union, Optional
 import docker
 import pandas as pd
+from logai_mcp.dataframe_utils import smart_create_dataframe, to_pandas
 
 from logai_mcp.session import (
     app,
@@ -43,8 +44,10 @@ def _list_containers_impl() -> Optional[pd.DataFrame]:
             "Status": container.status
         })
     logger.info(f"Found {len(container_list)} containers.")
-    container_data_df = pd.DataFrame(container_list)
-    return container_data_df
+    # Use smart DataFrame creation for better performance with polars when available
+    container_data_df = smart_create_dataframe(container_list, prefer_polars=True)
+    # Convert to pandas for compatibility with existing code
+    return to_pandas(container_data_df)
 
 _SHELL.push({"list_containers_impl": _list_containers_impl})
 

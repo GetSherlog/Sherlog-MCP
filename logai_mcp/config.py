@@ -1,10 +1,8 @@
 from functools import lru_cache
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings
 from typing import Optional, List, Dict, Any
 import json
-import os
-from pathlib import Path
 
 
 class Settings(BaseSettings): # type: ignore[misc]
@@ -81,7 +79,6 @@ class Settings(BaseSettings): # type: ignore[misc]
         alias="GRAFANA_API_KEY",
     )
 
-    # Sentry Configuration
     sentry_auth_token: Optional[str] = Field(
         default=None,
         description="Authentication token for Sentry API access.",
@@ -94,20 +91,6 @@ class Settings(BaseSettings): # type: ignore[misc]
         alias="SENTRY_HOST",
     )
 
-    # MindsDB Configuration
-    mindsdb_url: Optional[str] = Field(
-        default=None,
-        description="Base URL for the MindsDB instance (e.g., http://localhost:47334)",
-        alias="MINDSDB_URL",
-    )
-
-    mindsdb_access_token: Optional[str] = Field(
-        default=None,
-        description="Access token for MindsDB MCP server authentication.",
-        alias="MINDSDB_ACCESS_TOKEN",
-    )
-
-    # AWS S3 Configuration
     aws_access_key_id: Optional[str] = Field(
         default=None,
         description="AWS Access Key ID for S3 authentication.",
@@ -132,7 +115,6 @@ class Settings(BaseSettings): # type: ignore[misc]
         alias="AWS_SESSION_TOKEN",
     )
 
-    # Mixpanel Configuration
     mixpanel_api_secret: Optional[str] = Field(
         default=None,
         description="API secret for Mixpanel authentication.",
@@ -145,7 +127,6 @@ class Settings(BaseSettings): # type: ignore[misc]
         alias="MIXPANEL_HOST",
     )
 
-    # Code retrieval configuration
     codebase_path: Optional[str] = Field(
         default=None,
         description="Path to the codebase directory for code retrieval tools.",
@@ -159,7 +140,6 @@ class Settings(BaseSettings): # type: ignore[misc]
         alias="SUPPORTED_LANGUAGES",
     )
 
-    # Kubernetes Configuration
     kubeconfig_path: Optional[str] = Field(
         default=None,
         description="Path to the Kubernetes config file. "
@@ -167,44 +147,37 @@ class Settings(BaseSettings): # type: ignore[misc]
         alias="KUBECONFIG_PATH",
     )
 
-    # MCP Configuration File Path
-    mcp_config_path: str = Field(
-        default="mcp.json",
-        description="Path to the MCP configuration file (similar to Claude Desktop's config)",
-        alias="MCP_CONFIG_PATH",
+    external_mcps_json: Optional[str] = Field(
+        default=None,
+        description="JSON string in Claude Desktop format containing external MCP server configurations",
+        alias="EXTERNAL_MCPS_JSON",
     )
     
-    # External MCP Configuration (loaded from mcp.json)
     external_mcps: Dict[str, Dict[str, Any]] = Field(
         default_factory=dict,
-        description="Configuration for external MCP servers loaded from mcp.json",
+        description="Configuration for external MCP servers loaded from EXTERNAL_MCPS_JSON",
     )
 
     def load_mcp_config(self) -> Dict[str, Dict[str, Any]]:
-        """Load MCP configuration from mcp.json file."""
-        config_path = Path(self.mcp_config_path)
-
-        # Check multiple locations for mcp.json
-        search_paths = [
-            config_path if config_path.is_absolute() else None,
-            Path.cwd() / config_path,
-            Path.home() / ".logai-mcp" / "mcp.json",
-            Path(__file__).parent.parent / config_path,
-        ]
-
-        for path in search_paths:
-            if path and path.exists():
-                try:
-                    with open(path, 'r') as f:
-                        config = json.load(f)
-                        # Support both "mcpServers" (Claude Desktop style) and direct format
-                        if "mcpServers" in config:
-                            return config["mcpServers"]
-                        return config
-                except Exception as e:
-                    print(f"Error loading MCP config from {path}: {e}")
-
-        return {}
+        """Load MCP configuration from EXTERNAL_MCPS_JSON environment variable.
+        
+        Returns:
+            Dictionary of external MCP server configurations
+        """
+        if not self.external_mcps_json:
+            return {}
+        
+        try:
+            config = json.loads(self.external_mcps_json)
+            if isinstance(config, dict) and "mcpServers" in config:
+                return config["mcpServers"]
+            elif isinstance(config, dict):
+                return config
+            else:
+                raise ValueError("EXTERNAL_MCPS_JSON must be a JSON object")
+        except Exception as e:
+            print(f"Error parsing EXTERNAL_MCPS_JSON: {e}")
+            return {}
 
     model_config = {
         "env_file": ".env",
@@ -223,7 +196,6 @@ def get_settings() -> Settings:
     """
     settings = Settings()
 
-    # Load external MCPs from mcp.json
     settings.external_mcps = settings.load_mcp_config()
 
     return settings

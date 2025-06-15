@@ -39,6 +39,46 @@ pytest tests/integration/test_basic_connection_sdk.py
 ## Environment Variables
 
 - `MCP_SERVER_URL` - Base URL of the MCP server (default: `http://localhost:8000`)
+- `EXTERNAL_MCPS_JSON` - JSON string containing external MCP server configurations (optional)
+
+## External MCP Configuration
+
+To test with external MCPs, set the `EXTERNAL_MCPS_JSON` environment variable in Claude Desktop format:
+
+```bash
+# Basic example with Google Sheets
+export EXTERNAL_MCPS_JSON='{
+  "google-sheets": {
+    "command": "uvx",
+    "args": ["mcp-google-sheets@latest"],
+    "env": {
+      "SERVICE_ACCOUNT_PATH": "/path/to/service-account.json",
+      "DRIVE_FOLDER_ID": "optional-folder-id"
+    }
+  }
+}'
+
+# Multiple external MCPs
+export EXTERNAL_MCPS_JSON='{
+  "google-sheets": {
+    "command": "uvx",
+    "args": ["mcp-google-sheets@latest"],
+    "env": {
+      "SERVICE_ACCOUNT_PATH": "/path/to/service-account.json"
+    }
+  },
+  "postgres": {
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-postgres"],
+    "env": {
+      "DATABASE_URL": "postgresql://user:password@localhost/dbname"
+    }
+  }
+}'
+
+# Then run tests
+pytest tests/integration/test_multi_mcp_integration_sdk.py
+```
 
 ## Using the MCP SDK
 

@@ -349,10 +349,10 @@ LogAI MCP can dynamically integrate with any other MCP server, making their tool
 
 ### Configuration
 
-Create an `mcp.json` file in your project directory:
+Configure external MCPs using the `EXTERNAL_MCPS_JSON` environment variable in Claude Desktop format:
 
-```json
-{
+```bash
+export EXTERNAL_MCPS_JSON='{
   "mcpServers": {
     "google-sheets": {
       "command": "uvx",
@@ -363,14 +363,23 @@ Create an `mcp.json` file in your project directory:
       }
     }
   }
-}
+}'
 ```
 
-The server looks for `mcp.json` in:
-1. Current working directory
-2. `~/.logai-mcp/mcp.json`
-3. LogAI MCP installation directory
-4. Custom path via `MCP_CONFIG_PATH` environment variable
+Or use the simplified format (direct mcpServers content):
+
+```bash
+export EXTERNAL_MCPS_JSON='{
+  "google-sheets": {
+    "command": "uvx",
+    "args": ["mcp-google-sheets@latest"],
+    "env": {
+      "SERVICE_ACCOUNT_PATH": "/path/to/service-account.json",
+      "DRIVE_FOLDER_ID": "optional-folder-id"
+    }
+  }
+}'
+```
 
 ### How It Works
 
@@ -381,10 +390,10 @@ The server looks for `mcp.json` in:
 
 ### Adding Other External MCPs
 
-You can add multiple MCP servers to `mcp.json`:
+You can configure multiple MCP servers in the EXTERNAL_MCPS_JSON environment variable:
 
-```json
-{
+```bash
+export EXTERNAL_MCPS_JSON='{
   "mcpServers": {
     "google-sheets": {
       "command": "uvx",
@@ -413,7 +422,7 @@ You can add multiple MCP servers to `mcp.json`:
       }
     }
   }
-}
+}'
 ```
 
 ### Benefits

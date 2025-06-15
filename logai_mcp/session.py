@@ -6,10 +6,9 @@ All other modules should *only* import what they need from here instead of
 instantiating additional `FastMCP` objects.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 import logging
 import dill
-import pickle
 from pathlib import Path
 import atexit
 
@@ -18,11 +17,8 @@ import nltk.downloader
 from mcp.server.fastmcp import FastMCP
 from logai_mcp.config import get_settings
 
-# Configure FastMCP for Sherlog Canvas web application usage
-# stateless_http=True makes it suitable for multi-node deployments
 app = FastMCP(name="LogAIMCP", stateless_http=True)
 
-# Add health check endpoint
 @app.custom_route("/health", methods=["GET"])
 async def health_check(request):
     from starlette.responses import JSONResponse
@@ -50,7 +46,6 @@ if not logger.handlers:
 settings = get_settings()
 logger.setLevel(getattr(logging, settings.log_level.upper(), logging.INFO))
 
-# Session persistence
 SESSION_FILE = Path("session_state.pkl")
 
 def save_session():
@@ -97,5 +92,4 @@ def restore_session():
     except Exception as e:
         logger.error(f"Session restore failed: {e}")
 
-# Auto-save on shutdown
 atexit.register(save_session)

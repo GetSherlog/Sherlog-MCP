@@ -19,6 +19,7 @@ import fnmatch
 from typing import List, Dict, Any, Optional
 
 import pandas as pd
+from logai_mcp.dataframe_utils import read_csv_smart, to_pandas
 
 from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 from logai_mcp.session import app
@@ -173,7 +174,10 @@ async def _build_tree_recursive(current_path: pathlib.Path, root_validated_path_
 
 async def _read_file_impl(file_path: str) -> pd.DataFrame:
     valid = await validate_path(file_path)
-    return pd.read_csv(valid)
+    # Use smart CSV reader for better performance with polars when available
+    df = read_csv_smart(str(valid))
+    # Ensure pandas format for compatibility with existing code
+    return to_pandas(df)
 
 async def _list_directory_impl(path: str) -> Optional[pd.DataFrame]:
     valid_path = await validate_path(path)
