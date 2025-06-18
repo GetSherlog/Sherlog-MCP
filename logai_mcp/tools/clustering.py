@@ -7,27 +7,27 @@ Follows the same execution model as `filesystem_tools.py`:
   to the caller-supplied `save_as` variable inside the IPython shell.
 """
 
-from typing import Any, Dict
+from typing import Any
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+from logai.algorithms.clustering_algo.kmeans import KMeansParams
+from logai.analysis.clustering import Clustering, ClusteringConfig
 
+from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 from logai_mcp.session import (
     app,
     logger,
 )
 
-from logai.analysis.clustering import Clustering, ClusteringConfig
-from logai.algorithms.clustering_algo.kmeans import KMeansParams
-from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
-
 # ---------------------------------------------------------------------------
+
 
 def _cluster_log_features_impl(
     feature_vector: Any,
     algo_name: str = "kmeans",
     n_clusters: int = 7,
-    clustering_params: Dict | None = None,
+    clustering_params: dict | None = None,
 ) -> pd.Series:
     """Group log entries by features using clustering, returning a Pandas Series of cluster IDs.
 
@@ -98,8 +98,8 @@ def _cluster_log_features_impl(
     - Uses LogAI's `Clustering` and `ClusteringConfig`. For "kmeans",
       `KMeansParams` is used, incorporating `n_clusters`.
     - Cluster IDs are returned as strings in the Series.
-    """
 
+    """
     if isinstance(feature_vector, pd.DataFrame):
         df = feature_vector
     elif isinstance(feature_vector, np.ndarray):
@@ -112,13 +112,17 @@ def _cluster_log_features_impl(
         # Instantiate KMeansParams first, then set attributes
         algo_params_obj = KMeansParams()
         algo_params_obj.n_clusters = n_clusters
-        algo_params_obj.algorithm = "lloyd" # Default or from clustering_params if specified
+        algo_params_obj.algorithm = (
+            "lloyd"  # Default or from clustering_params if specified
+        )
         # Apply other params from clustering_params, potentially overriding 'algorithm' if present
         for key, value in clustering_params.items():
             if hasattr(algo_params_obj, key):
                 setattr(algo_params_obj, key, value)
             else:
-                logger.warning(f"KMeansParams does not have attribute '{key}'. It will be ignored.")
+                logger.warning(
+                    f"KMeansParams does not have attribute '{key}'. It will be ignored."
+                )
         algo_params = algo_params_obj
     else:
         algo_params = clustering_params  # type: ignore[assignment]
@@ -129,18 +133,22 @@ def _cluster_log_features_impl(
     clusterer = Clustering(cfg)
     clusterer.fit(df)
     ids = clusterer.predict(df)
-    series = pd.Series(ids.astype(str), name="cluster_id", index=df.index) # Ensure index alignment
+    series = pd.Series(
+        ids.astype(str), name="cluster_id", index=df.index
+    )  # Ensure index alignment
 
     return series
 
+
 _SHELL.push({"_cluster_log_features_impl": _cluster_log_features_impl})
+
 
 @app.tool()
 async def cluster_log_features(
     feature_vector: Any,
     algo_name: str = "kmeans",
     n_clusters: int = 7,
-    clustering_params: Dict | None = None,
+    clustering_params: dict | None = None,
     *,
     save_as: str,
 ):
@@ -157,13 +165,14 @@ async def cluster_log_features(
     save_as : str
         Name of the Python variable that will hold the resulting Series inside
         the shell environment.
-    """
 
+    """
     code = (
         f"{save_as} = _cluster_log_features_impl("  # assignment\n"
         f"    {repr(feature_vector)}, {repr(algo_name)}, {n_clusters}, {repr(clustering_params)})\n"
         f"{save_as}"
     )
     return await run_code_in_shell(code)
+
 
 cluster_log_features.__doc__ = _cluster_log_features_impl.__doc__

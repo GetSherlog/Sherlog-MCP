@@ -4,6 +4,8 @@
 .venv/
 .vscode/
 __pycache__/
+.claude/
+.ruff_cache/
 
 # Env files
 .env

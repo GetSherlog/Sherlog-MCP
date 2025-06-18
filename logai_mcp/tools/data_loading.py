@@ -4,38 +4,43 @@ All utilities here *register* with the FastMCP app that lives in
 :pyfile:`logai_mcp.session`.
 """
 
-from typing import Any, List, Optional
+from typing import Any
 
 import pandas as pd
+from logai.dataloader.data_loader import DataLoaderConfig, FileDataLoader
 
-from logai.dataloader.data_loader import FileDataLoader, DataLoaderConfig
+from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 from logai_mcp.session import (
     app,
 )
 
-from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 
-def _get_log_file_columns_impl(file_path: str) -> List[str]:
+def _get_log_file_columns_impl(file_path: str) -> list[str]:
     """Return the column names from the header of a CSV-style log file."""
     cols = pd.read_csv(file_path, nrows=0).columns.tolist()
     return cols
 
+
 _SHELL.push({"_get_log_file_columns_impl": _get_log_file_columns_impl})
+
 
 @app.tool()
 async def get_log_file_columns(file_path: str, save_as: str):
     """Wrapper that assigns `_get_log_file_columns_impl` result to `save_as` in the shell."""
-
-    code = (
-        f"{save_as} = _get_log_file_columns_impl({repr(file_path)})\n"
-        f"{save_as}"
-    )
+    code = f"{save_as} = _get_log_file_columns_impl({repr(file_path)})\n{save_as}"
     return await run_code_in_shell(code)
+
 
 get_log_file_columns.__doc__ = _get_log_file_columns_impl.__doc__
 
 
-def _load_file_log_data_impl(file_path: str, dimensions: dict, log_type: str, infer_datetime: bool, datetime_format: str) -> Optional[pd.DataFrame]:
+def _load_file_log_data_impl(
+    file_path: str,
+    dimensions: dict,
+    log_type: str,
+    infer_datetime: bool,
+    datetime_format: str,
+) -> pd.DataFrame | None:
     """Load structured log data from a local file (e.g., CSV) into a LogAI `LogRecordObject` and return a Pandas DataFrame.
 
     This tool reads a log file (primarily CSV), processes it using a pandas backend for
@@ -99,8 +104,8 @@ def _load_file_log_data_impl(file_path: str, dimensions: dict, log_type: str, in
     -----
     - The `dimensions` mapping is critical for correct parsing. Ensure that all
       columns listed in `dimensions` actually exist in the input file.
-    """
 
+    """
     config = DataLoaderConfig()
     config.filepath = file_path
     config.dimensions = dimensions
@@ -108,8 +113,9 @@ def _load_file_log_data_impl(file_path: str, dimensions: dict, log_type: str, in
     config.infer_datetime = infer_datetime
     config.datetime_format = datetime_format
     file_data_loader = FileDataLoader(config)
-   
+
     return file_data_loader.load_data().to_dataframe()
+
 
 _SHELL.push({"_load_file_log_data_impl": _load_file_log_data_impl})
 
@@ -123,25 +129,19 @@ async def load_file_log_data(
     datetime_format: str = "%Y-%m-%dT%H:%M:%SZ",
     *,
     save_as: str,
-) -> Optional[pd.DataFrame]:
+) -> pd.DataFrame | None:
     """Wrapper that assigns `_load_file_log_data_impl` result to `save_as` in the shell."""
-
-    code = (
-        f"{save_as} = _load_file_log_data_impl({repr(file_path)}, {repr(dimensions)}, {repr(log_type)}, {repr(infer_datetime)}, {repr(datetime_format)})\n"
-    )
+    code = f"{save_as} = _load_file_log_data_impl({repr(file_path)}, {repr(dimensions)}, {repr(log_type)}, {repr(infer_datetime)}, {repr(datetime_format)})\n"
     return await run_code_in_shell(code)
 
 
-def _default_dimension_mapping(cols: List[str]) -> pd.DataFrame:
+def _default_dimension_mapping(cols: list[str]) -> pd.DataFrame:
     def _norm(name: str) -> str:
-        return (
-            name.lower()
-            .replace(" ", "")
-            .replace("_", "")
-            .replace("-", "")
-        )
+        return name.lower().replace(" ", "").replace("_", "").replace("-", "")
 
-    ts_candidates = [c for c in cols if _norm(c) in {"timestamp", "time", "date", "datetime"}]
+    ts_candidates = [
+        c for c in cols if _norm(c) in {"timestamp", "time", "date", "datetime"}
+    ]
     body_candidates_exact = {"body", "message", "url", "log", "text"}
     body_candidates = [c for c in cols if _norm(c) in body_candidates_exact]
 
@@ -160,7 +160,7 @@ def _default_dimension_mapping(cols: List[str]) -> pd.DataFrame:
     }
     label_candidates = [c for c in cols if any(kw in _norm(c) for kw in label_keywords)]
 
-    res =  {
+    res = {
         "timestamp": ts_candidates[:1],
         "body": body_candidates[:1] if body_candidates else [],
         "span_id": [],
@@ -169,17 +169,22 @@ def _default_dimension_mapping(cols: List[str]) -> pd.DataFrame:
 
     return pd.DataFrame(res)
 
+
 _SHELL.push({"_default_dimension_mapping": _default_dimension_mapping})
+
 
 def _suggest_dimension_mapping_impl(file_path: str) -> pd.DataFrame:
     cols = pd.read_csv(file_path, nrows=0).columns.tolist()
     return _default_dimension_mapping(cols)
 
+
 _SHELL.push({"_suggest_dimension_mapping_impl": _suggest_dimension_mapping_impl})
 
 
 @app.tool()
-async def suggest_dimension_mapping(file_path: str, save_as: str) -> Optional[pd.DataFrame]:
+async def suggest_dimension_mapping(
+    file_path: str, save_as: str
+) -> pd.DataFrame | None:
     """Generate a heuristic ``dimensions`` mapping for a log file, saved to session_vars.
 
     Inspects CSV column names and suggests a mapping for "timestamp", "body",
@@ -233,9 +238,7 @@ async def suggest_dimension_mapping(file_path: str, save_as: str) -> Optional[pd
       are named. Manual review and adjustment of the suggested mapping are often necessary.
     - This tool currently primarily targets CSV files, as it uses
       `get_log_file_columns` which is CSV-oriented.
+
     """
-    code = (
-        f"{save_as} = _suggest_dimension_mapping_impl({repr(file_path)})\n"
-        f"{save_as}"
-    )
+    code = f"{save_as} = _suggest_dimension_mapping_impl({repr(file_path)})\n{save_as}"
     return await run_code_in_shell(code)

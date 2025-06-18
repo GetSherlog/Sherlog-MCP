@@ -54,6 +54,8 @@ dependencies = [
 
 [project.scripts]
 logai-mcp-server = "logai_mcp_server:main"
+lint = "ruff:check"
+format-code = "ruff:format"
 
 [build-system]
 requires = ["setuptools>=67", "wheel"]
@@ -65,3 +67,132 @@ package = false
 
 [tool.setuptools]
 py-modules = ["logai_mcp_server"]
+
+# Linting and formatting configuration
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv", 
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
+
+[tool.ruff.lint]
+# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
+# Plus: isort (`I`), pydocstyle (`D`), pyupgrade (`UP`), and more
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "I",   # isort
+    "D",   # pydocstyle
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "T20", # flake8-print
+]
+
+ignore = [
+    "D100", # Missing docstring in public module
+    "D101", # Missing docstring in public class
+    "D102", # Missing docstring in public method
+    "D103", # Missing docstring in public function
+    "D104", # Missing docstring in public package
+    "D105", # Missing docstring in magic method
+    "D203", # 1 blank line required before class docstring (conflicts with D211)
+    "D212", # Multi-line docstring summary should start at the first line (conflicts with D213)
+    "E501", # Line too long (let ruff format handle this)
+    "T201", # print statements (allow for debugging)
+]
+
+# Allow fix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+
+[tool.ruff.lint.isort]
+known-first-party = ["logai_mcp"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false  # Start lenient, can be made stricter
+disallow_incomplete_defs = false
+check_untyped_defs = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+# Handle third-party libraries without type stubs
+ignore_missing_imports = true
+
+# Exclude some directories
+exclude = [
+    "venv/",
+    ".venv/",
+    "build/",
+    "dist/",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "mypy>=1.16.1",
+    "ruff>=0.12.0",
+]

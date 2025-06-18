@@ -6,24 +6,26 @@ Refactored to follow the shell-execution pattern:
 - No direct `session_vars` or `_resolve` in helpers.
 """
 
-from typing import Any, Dict, List, Union
+from typing import Any
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+from logai.information_extraction.feature_extractor import (
+    FeatureExtractor,
+    FeatureExtractorConfig,
+)
 
+from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 from logai_mcp.session import (
     app,
     logger,
 )
 
-from logai.information_extraction.feature_extractor import FeatureExtractorConfig, FeatureExtractor
-
-from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 
 def _extract_log_features_impl(
-    log_vectors: Union[pd.Series, pd.DataFrame, np.ndarray, list[float]],
-    attributes_encoded: Union[pd.DataFrame, np.ndarray, list[float]],
-    timestamps: Union[pd.Series, np.ndarray, list[float]],
+    log_vectors: pd.Series | pd.DataFrame | np.ndarray | list[float],
+    attributes_encoded: pd.DataFrame | np.ndarray | list[float],
+    timestamps: pd.Series | np.ndarray | list[float],
     max_feature_len: int = 100,
 ) -> pd.DataFrame:
     """Combine log vectors, attributes, and timestamps into a unified feature DataFrame.
@@ -83,20 +85,30 @@ def _extract_log_features_impl(
       to avoid unexpected behavior or data misalignment.
     - This function utilizes `logai.information_extraction.feature_extractor.FeatureExtractor`
       for the core feature extraction logic.
-    """
 
+    """
     if not isinstance(log_vectors, (pd.Series, np.ndarray, list)):
-        raise TypeError(f"log_vectors must be Series, ndarray or list, got {type(log_vectors)}")
-    log_series = pd.Series(log_vectors) if not isinstance(log_vectors, pd.Series) else log_vectors
+        raise TypeError(
+            f"log_vectors must be Series, ndarray or list, got {type(log_vectors)}"
+        )
+    log_series = (
+        pd.Series(log_vectors)
+        if not isinstance(log_vectors, pd.Series)
+        else log_vectors
+    )
 
     if isinstance(attributes_encoded, pd.DataFrame):
         attrs_df = attributes_encoded
     else:
         attrs_df = pd.DataFrame(attributes_encoded)
-    ts_series = pd.Series(timestamps) if not isinstance(timestamps, pd.Series) else timestamps
+    ts_series = (
+        pd.Series(timestamps) if not isinstance(timestamps, pd.Series) else timestamps
+    )
 
-    if not (log_series.index.equals(ts_series.index) and 
-            (attrs_df.empty or log_series.index.equals(attrs_df.index))):
+    if not (
+        log_series.index.equals(ts_series.index)
+        and (attrs_df.empty or log_series.index.equals(attrs_df.index))
+    ):
         logger.warning(
             "Indices of log_vectors, timestamps, and attributes_encoded (if not empty) do not match. "
             "This may lead to misaligned features or errors in FeatureExtractor. "
@@ -107,7 +119,7 @@ def _extract_log_features_impl(
     cfg = FeatureExtractorConfig()
     cfg.max_feature_len = max_feature_len
     extractor = FeatureExtractor(cfg)
-    
+
     try:
         feat_vec = extractor.convert_to_feature_vector(log_series, attrs_df, ts_series)
     except Exception as e:
@@ -121,13 +133,15 @@ def _extract_log_features_impl(
 
     return feat_vec
 
+
 _SHELL.push({"_extract_log_features_impl": _extract_log_features_impl})
+
 
 @app.tool()
 async def extract_log_features(
-    log_vectors: Union[str, pd.Series, pd.DataFrame, np.ndarray, list[float]],
-    attributes_encoded: Union[str, pd.DataFrame, np.ndarray, list[float]],
-    timestamps: Union[str, pd.Series, np.ndarray, list[float]],
+    log_vectors: str | pd.Series | pd.DataFrame | np.ndarray | list[float],
+    attributes_encoded: str | pd.DataFrame | np.ndarray | list[float],
+    timestamps: str | pd.Series | np.ndarray | list[float],
     max_feature_len: int = 100,
     *,
     save_as: str,
@@ -139,23 +153,27 @@ async def extract_log_features(
     variable names (strings) or actual data objects.
     """
     lv_arg = log_vectors if isinstance(log_vectors, str) else repr(log_vectors)
-    ae_arg = attributes_encoded if isinstance(attributes_encoded, str) else repr(attributes_encoded)
+    ae_arg = (
+        attributes_encoded
+        if isinstance(attributes_encoded, str)
+        else repr(attributes_encoded)
+    )
     ts_arg = timestamps if isinstance(timestamps, str) else repr(timestamps)
 
-    code = (
-        f"{save_as} = _extract_log_features_impl({lv_arg}, {ae_arg}, {ts_arg}, {max_feature_len})\n"
-    )
+    code = f"{save_as} = _extract_log_features_impl({lv_arg}, {ae_arg}, {ts_arg}, {max_feature_len})\n"
     return await run_code_in_shell(code)
 
+
 extract_log_features.__doc__ = _extract_log_features_impl.__doc__
+
 
 def _extract_timeseries_features_impl(
     parsed_loglines: pd.Series,
     attributes: pd.DataFrame,
     timestamps: pd.Series,
     group_by_time: str,
-    group_by_category: List[str],
-    feature_extractor_params: Dict[str, Any] | None = None,
+    group_by_category: list[str],
+    feature_extractor_params: dict[str, Any] | None = None,
 ) -> pd.DataFrame:
     """Convert logs into counter vectors (Pandas DataFrame) for time-series analysis.
 
@@ -198,7 +216,7 @@ def _extract_timeseries_features_impl(
     --------
     The following example demonstrates usage via the wrapper tool, which is how
     this implementation is typically invoked:
-    
+
     # Assuming "templates", "attrs", "ts" are appropriate data in session_vars:
     >>> extract_timeseries_features(
     ...     parsed_loglines="templates",
@@ -223,30 +241,34 @@ def _extract_timeseries_features_impl(
     - This function directly expects pandas Series/DataFrame objects as inputs.
     - Uses `logai.information_extraction.feature_extractor.FeatureExtractor` with
       its `convert_to_counter_vector` method.
-    """
 
+    """
     cfg = FeatureExtractorConfig()
     cfg.group_by_time = group_by_time
     cfg.group_by_category = group_by_category
     if feature_extractor_params:
         for k, v in feature_extractor_params.items():
             setattr(cfg, k, v)
-            
+
     extractor = FeatureExtractor(cfg)
-    counter_df = extractor.convert_to_counter_vector(parsed_loglines, attributes, timestamps)
+    counter_df = extractor.convert_to_counter_vector(
+        parsed_loglines, attributes, timestamps
+    )
 
     return counter_df
 
+
 _SHELL.push({"_extract_timeseries_features_impl": _extract_timeseries_features_impl})
+
 
 @app.tool()
 async def extract_timeseries_features(
-    parsed_loglines: Union[str, pd.Series],
-    attributes: Union[str, pd.DataFrame],
-    timestamps: Union[str, pd.Series],
+    parsed_loglines: str | pd.Series,
+    attributes: str | pd.DataFrame,
+    timestamps: str | pd.Series,
     group_by_time: str,
-    group_by_category: List[str],
-    feature_extractor_params: Dict[str, Any] | None = None,
+    group_by_category: list[str],
+    feature_extractor_params: dict[str, Any] | None = None,
     *,
     save_as: str,
 ):
@@ -255,7 +277,9 @@ async def extract_timeseries_features(
     Assigns the counter vector DataFrame to `save_as` in the shell.
     Inputs `parsed_loglines`, `attributes`, `timestamps` can be variable names or objects.
     """
-    pl_arg = parsed_loglines if isinstance(parsed_loglines, str) else repr(parsed_loglines)
+    pl_arg = (
+        parsed_loglines if isinstance(parsed_loglines, str) else repr(parsed_loglines)
+    )
     attrs_arg = attributes if isinstance(attributes, str) else repr(attributes)
     ts_arg = timestamps if isinstance(timestamps, str) else repr(timestamps)
 
@@ -264,5 +288,6 @@ async def extract_timeseries_features(
         f"{repr(group_by_time)}, {repr(group_by_category)}, {repr(feature_extractor_params)})\n"
     )
     return await run_code_in_shell(code)
+
 
 extract_timeseries_features.__doc__ = _extract_timeseries_features_impl.__doc__

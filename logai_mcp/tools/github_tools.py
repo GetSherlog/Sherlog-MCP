@@ -6,17 +6,15 @@ All operations are logged and can be accessed through audit endpoints.
 Tools are only registered if GitHub PAT token is available.
 """
 
-from typing import Union, Optional, Dict
-import requests
 import pandas as pd
+import requests
 
+from logai_mcp.config import get_settings
+from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 from logai_mcp.session import (
     app,
     logger,
 )
-
-from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
-from logai_mcp.config import get_settings
 
 
 def _github_credentials_available() -> bool:
@@ -37,58 +35,65 @@ if _github_credentials_available():
         settings = get_settings()
         if not settings.github_pat_token:
             raise ValueError("GITHUB_PAT_TOKEN must be set in environment variables")
-        
+
         # Validate token format
         token = settings.github_pat_token.strip()
-        if not (token.startswith('ghp_') or token.startswith('github_pat_')):
-            logger.warning(f"GitHub token format may be invalid. Expected to start with 'ghp_' or 'github_pat_', got: {token[:10]}...")
-        
-        session = requests.Session()
-        session.headers.update({
-            "Authorization": f"token {token}",
-            "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "LogAI-MCP-Server"
-        })
-        return session
+        if not (token.startswith("ghp_") or token.startswith("github_pat_")):
+            logger.warning(
+                f"GitHub token format may be invalid. Expected to start with 'ghp_' or 'github_pat_', got: {token[:10]}..."
+            )
 
+        session = requests.Session()
+        session.headers.update(
+            {
+                "Authorization": f"token {token}",
+                "Accept": "application/vnd.github.v3+json",
+                "User-Agent": "LogAI-MCP-Server",
+            }
+        )
+        return session
 
     # GitHub Issue Tools
     def _get_issue_impl(owner: str, repo: str, issue_number: int) -> pd.DataFrame:
-        """
-        Get details of a specific issue from a GitHub repository.
-        
+        """Get details of a specific issue from a GitHub repository.
+
         Args:
             owner (str): Repository owner (username or organization)
             repo (str): Repository name
             issue_number (int): Issue number to retrieve
-            
+
         Returns:
             pd.DataFrame: Issue details as a DataFrame
+
         """
         session = _get_github_session()
-        
+
         url = f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}"
-        
+
         logger.info(f"Fetching GitHub issue #{issue_number} from {owner}/{repo}")
         response = session.get(url)
-        
+
         # Enhanced error handling with detailed information
         if not response.ok:
             error_details = {
-                'status_code': response.status_code,
-                'url': url,
-                'headers': dict(response.headers),
-                'response_text': response.text[:500] if response.text else "No response body"
+                "status_code": response.status_code,
+                "url": url,
+                "headers": dict(response.headers),
+                "response_text": response.text[:500]
+                if response.text
+                else "No response body",
             }
-            
+
             if response.status_code == 403:
-                rate_limit_remaining = response.headers.get('X-RateLimit-Remaining', 'Unknown')
-                rate_limit_reset = response.headers.get('X-RateLimit-Reset', 'Unknown')
-                error_msg = f"GitHub API 403 Forbidden: This could be due to:\n"
-                error_msg += f"1. Invalid or insufficient token permissions\n"
+                rate_limit_remaining = response.headers.get(
+                    "X-RateLimit-Remaining", "Unknown"
+                )
+                rate_limit_reset = response.headers.get("X-RateLimit-Reset", "Unknown")
+                error_msg = "GitHub API 403 Forbidden: This could be due to:\n"
+                error_msg += "1. Invalid or insufficient token permissions\n"
                 error_msg += f"2. Rate limiting (remaining: {rate_limit_remaining}, reset: {rate_limit_reset})\n"
-                error_msg += f"3. Repository access restrictions\n"
-                error_msg += f"4. Invalid repository or issue number\n"
+                error_msg += "3. Repository access restrictions\n"
+                error_msg += "4. Invalid repository or issue number\n"
                 error_msg += f"URL: {url}\n"
                 error_msg += f"Response: {response.text[:200]}"
                 logger.error(error_msg)
@@ -100,155 +105,188 @@ if _github_credentials_available():
             else:
                 logger.error(f"GitHub API Error: {error_details}")
                 response.raise_for_status()
-        
+
         issue = response.json()
         logger.info(f"Retrieved issue: {issue['title']}")
-        
+
         # Convert issue to DataFrame
         issue_data = {
-            'number': [issue['number']],
-            'title': [issue['title']],
-            'body': [issue.get('body', '')],
-            'state': [issue['state']],
-            'user_login': [issue['user']['login']],
-            'user_id': [issue['user']['id']],
-            'created_at': [issue['created_at']],
-            'updated_at': [issue['updated_at']],
-            'closed_at': [issue.get('closed_at')],
-            'labels': [', '.join([label['name'] for label in issue.get('labels', [])])],
-            'assignees': [', '.join([assignee['login'] for assignee in issue.get('assignees', [])])],
-            'milestone': [issue.get('milestone', {}).get('title') if issue.get('milestone') else None],
-            'comments': [issue['comments']],
-            'html_url': [issue['html_url']],
-            'owner': [owner],
-            'repo': [repo]
+            "number": [issue["number"]],
+            "title": [issue["title"]],
+            "body": [issue.get("body", "")],
+            "state": [issue["state"]],
+            "user_login": [issue["user"]["login"]],
+            "user_id": [issue["user"]["id"]],
+            "created_at": [issue["created_at"]],
+            "updated_at": [issue["updated_at"]],
+            "closed_at": [issue.get("closed_at")],
+            "labels": [", ".join([label["name"] for label in issue.get("labels", [])])],
+            "assignees": [
+                ", ".join(
+                    [assignee["login"] for assignee in issue.get("assignees", [])]
+                )
+            ],
+            "milestone": [
+                issue.get("milestone", {}).get("title")
+                if issue.get("milestone")
+                else None
+            ],
+            "comments": [issue["comments"]],
+            "html_url": [issue["html_url"]],
+            "owner": [owner],
+            "repo": [repo],
         }
-        
+
         return pd.DataFrame(issue_data)
 
-
     def _test_github_connection_impl() -> pd.DataFrame:
-        """
-        Test GitHub API connection and token validity.
-        
+        """Test GitHub API connection and token validity.
+
         Returns:
             pd.DataFrame: Connection test results
+
         """
         try:
             session = _get_github_session()
-            
+
             # Test 1: Check authenticated user
             logger.info("Testing GitHub API connection...")
             auth_response = session.get("https://api.github.com/user")
-            
+
             # Test 2: Check rate limits
             rate_response = session.get("https://api.github.com/rate_limit")
-            
+
             results = []
-            
+
             # Auth test result
             if auth_response.ok:
                 user_data = auth_response.json()
-                results.append({
-                    'test': 'Authentication',
-                    'status': 'SUCCESS',
-                    'details': f"Logged in as: {user_data.get('login', 'Unknown')}",
-                    'user_id': user_data.get('id'),
-                    'user_type': user_data.get('type'),
-                    'scopes': auth_response.headers.get('X-OAuth-Scopes', 'Not available')
-                })
+                results.append(
+                    {
+                        "test": "Authentication",
+                        "status": "SUCCESS",
+                        "details": f"Logged in as: {user_data.get('login', 'Unknown')}",
+                        "user_id": user_data.get("id"),
+                        "user_type": user_data.get("type"),
+                        "scopes": auth_response.headers.get(
+                            "X-OAuth-Scopes", "Not available"
+                        ),
+                    }
+                )
             else:
-                results.append({
-                    'test': 'Authentication', 
-                    'status': 'FAILED',
-                    'details': f"HTTP {auth_response.status_code}: {auth_response.text[:200]}",
-                    'user_id': None,
-                    'user_type': None,
-                    'scopes': None
-                })
-            
-            # Rate limit test result  
+                results.append(
+                    {
+                        "test": "Authentication",
+                        "status": "FAILED",
+                        "details": f"HTTP {auth_response.status_code}: {auth_response.text[:200]}",
+                        "user_id": None,
+                        "user_type": None,
+                        "scopes": None,
+                    }
+                )
+
+            # Rate limit test result
             if rate_response.ok:
                 rate_data = rate_response.json()
-                core_limit = rate_data.get('resources', {}).get('core', {})
-                results.append({
-                    'test': 'Rate Limits',
-                    'status': 'SUCCESS', 
-                    'details': f"Remaining: {core_limit.get('remaining', 'Unknown')}/{core_limit.get('limit', 'Unknown')}",
-                    'user_id': None,
-                    'user_type': None,
-                    'scopes': f"Reset at: {core_limit.get('reset', 'Unknown')}"
-                })
+                core_limit = rate_data.get("resources", {}).get("core", {})
+                results.append(
+                    {
+                        "test": "Rate Limits",
+                        "status": "SUCCESS",
+                        "details": f"Remaining: {core_limit.get('remaining', 'Unknown')}/{core_limit.get('limit', 'Unknown')}",
+                        "user_id": None,
+                        "user_type": None,
+                        "scopes": f"Reset at: {core_limit.get('reset', 'Unknown')}",
+                    }
+                )
             else:
-                results.append({
-                    'test': 'Rate Limits',
-                    'status': 'FAILED',
-                    'details': f"HTTP {rate_response.status_code}: {rate_response.text[:200]}",
-                    'user_id': None,
-                    'user_type': None, 
-                    'scopes': None
-                })
-                
+                results.append(
+                    {
+                        "test": "Rate Limits",
+                        "status": "FAILED",
+                        "details": f"HTTP {rate_response.status_code}: {rate_response.text[:200]}",
+                        "user_id": None,
+                        "user_type": None,
+                        "scopes": None,
+                    }
+                )
+
             return pd.DataFrame(results)
-            
+
         except Exception as e:
             logger.error(f"GitHub connection test failed: {e}")
-            return pd.DataFrame([{
-                'test': 'Connection',
-                'status': 'FAILED', 
-                'details': str(e),
-                'user_id': None,
-                'user_type': None,
-                'scopes': None
-            }])
+            return pd.DataFrame(
+                [
+                    {
+                        "test": "Connection",
+                        "status": "FAILED",
+                        "details": str(e),
+                        "user_id": None,
+                        "user_type": None,
+                        "scopes": None,
+                    }
+                ]
+            )
 
-    _SHELL.push({"get_issue_impl": _get_issue_impl, "test_github_connection_impl": _test_github_connection_impl})
-
+    _SHELL.push(
+        {
+            "get_issue_impl": _get_issue_impl,
+            "test_github_connection_impl": _test_github_connection_impl,
+        }
+    )
 
     @app.tool()
-    async def get_issue(owner: str, repo: str, issue_number: int, *, save_as: str) -> Optional[pd.DataFrame]:
-        """
-        Get details of a specific issue from a GitHub repository.
-        
+    async def get_issue(
+        owner: str, repo: str, issue_number: int, *, save_as: str
+    ) -> pd.DataFrame | None:
+        """Get details of a specific issue from a GitHub repository.
+
         Args:
             owner (str): Repository owner (username or organization)
             repo (str): Repository name
             issue_number (int): Issue number to retrieve
             save_as (str): Variable name to store the issue details
-            
+
         Returns:
             pd.DataFrame: Issue details as a DataFrame
+
         """
         code = f'{save_as} = get_issue_impl("{owner}", "{repo}", {issue_number})\n{save_as}'
         df = await run_code_in_shell(code)
         if isinstance(df, pd.DataFrame):
-            return df.to_dict('records')
-
+            return df.to_dict("records")
 
     @app.tool()
-    async def test_github_connection(*, save_as: str = "github_test_results") -> Optional[pd.DataFrame]:
-        """
-        Test GitHub API connection and token validity.
-        
+    async def test_github_connection(
+        *, save_as: str = "github_test_results"
+    ) -> pd.DataFrame | None:
+        """Test GitHub API connection and token validity.
+
         Args:
             save_as (str): Variable name to store the test results
-            
+
         Returns:
             pd.DataFrame: Test results showing connection status, user info, and rate limits
+
         """
-        code = f'{save_as} = test_github_connection_impl()\n{save_as}'
+        code = f"{save_as} = test_github_connection_impl()\n{save_as}"
         df = await run_code_in_shell(code)
         if isinstance(df, pd.DataFrame):
-            return df.to_dict('records')
+            return df.to_dict("records")
 
+    def _search_issues_impl(
+        owner: str,
+        repo: str,
+        query: str | None = None,
+        state: str = "open",
+        labels: str | None = None,
+        sort: str = "created",
+        direction: str = "desc",
+        per_page: int = 30,
+        page: int = 1,
+    ) -> pd.DataFrame:
+        """Search for issues in a GitHub repository.
 
-    def _search_issues_impl(owner: str, repo: str, query: Optional[str] = None, 
-                           state: str = "open", labels: Optional[str] = None,
-                           sort: str = "created", direction: str = "desc",
-                           per_page: int = 30, page: int = 1) -> pd.DataFrame:
-        """
-        Search for issues in a GitHub repository.
-        
         Args:
             owner (str): Repository owner
             repo (str): Repository name
@@ -259,75 +297,101 @@ if _github_credentials_available():
             direction (str): Sort direction ('asc', 'desc')
             per_page (int): Results per page (max 100)
             page (int): Page number
-            
+
         Returns:
             pd.DataFrame: Search results as a DataFrame
+
         """
         session = _get_github_session()
-        
+
         url = f"https://api.github.com/repos/{owner}/{repo}/issues"
-        
+
         params = {
-            'state': state,
-            'sort': sort,
-            'direction': direction,
-            'per_page': min(per_page, 100),
-            'page': page
+            "state": state,
+            "sort": sort,
+            "direction": direction,
+            "per_page": min(per_page, 100),
+            "page": page,
         }
-        
+
         if labels:
-            params['labels'] = labels
-        
+            params["labels"] = labels
+
         logger.info(f"Searching GitHub issues in {owner}/{repo} with state={state}")
         response = session.get(url, params=params)
         response.raise_for_status()
-        
+
         issues = response.json()
         logger.info(f"Found {len(issues)} issues")
-        
+
         if not issues:
-            return pd.DataFrame(columns=['number', 'title', 'body', 'state', 'user_login', 'created_at', 'updated_at', 'owner', 'repo'])
-        
+            return pd.DataFrame(
+                columns=[
+                    "number",
+                    "title",
+                    "body",
+                    "state",
+                    "user_login",
+                    "created_at",
+                    "updated_at",
+                    "owner",
+                    "repo",
+                ]
+            )
+
         # Convert issues to DataFrame
         rows = []
         for issue in issues:
             # Skip pull requests (GitHub API returns PRs as issues)
-            if 'pull_request' in issue:
+            if "pull_request" in issue:
                 continue
-                
+
             row = {
-                'number': issue['number'],
-                'title': issue['title'],
-                'body': issue.get('body', ''),
-                'state': issue['state'],
-                'user_login': issue['user']['login'],
-                'user_id': issue['user']['id'],
-                'created_at': issue['created_at'],
-                'updated_at': issue['updated_at'],
-                'closed_at': issue.get('closed_at'),
-                'labels': ', '.join([label['name'] for label in issue.get('labels', [])]),
-                'assignees': ', '.join([assignee['login'] for assignee in issue.get('assignees', [])]),
-                'milestone': issue.get('milestone', {}).get('title') if issue.get('milestone') else None,
-                'comments': issue['comments'],
-                'html_url': issue['html_url'],
-                'owner': owner,
-                'repo': repo
+                "number": issue["number"],
+                "title": issue["title"],
+                "body": issue.get("body", ""),
+                "state": issue["state"],
+                "user_login": issue["user"]["login"],
+                "user_id": issue["user"]["id"],
+                "created_at": issue["created_at"],
+                "updated_at": issue["updated_at"],
+                "closed_at": issue.get("closed_at"),
+                "labels": ", ".join(
+                    [label["name"] for label in issue.get("labels", [])]
+                ),
+                "assignees": ", ".join(
+                    [assignee["login"] for assignee in issue.get("assignees", [])]
+                ),
+                "milestone": issue.get("milestone", {}).get("title")
+                if issue.get("milestone")
+                else None,
+                "comments": issue["comments"],
+                "html_url": issue["html_url"],
+                "owner": owner,
+                "repo": repo,
             }
             rows.append(row)
-        
+
         return pd.DataFrame(rows)
 
     _SHELL.push({"search_issues_impl": _search_issues_impl})
 
-
     @app.tool()
-    async def search_issues(owner: str, repo: str, query: Optional[str] = None,
-                           state: str = "open", labels: Optional[str] = None,
-                           sort: str = "created", direction: str = "desc",
-                           per_page: int = 30, page: int = 1, *, save_as: str) -> Optional[pd.DataFrame]:
-        """
-        Search for issues in a GitHub repository.
-        
+    async def search_issues(
+        owner: str,
+        repo: str,
+        query: str | None = None,
+        state: str = "open",
+        labels: str | None = None,
+        sort: str = "created",
+        direction: str = "desc",
+        per_page: int = 30,
+        page: int = 1,
+        *,
+        save_as: str,
+    ) -> pd.DataFrame | None:
+        """Search for issues in a GitHub repository.
+
         Args:
             owner (str): Repository owner
             repo (str): Repository name
@@ -339,120 +403,135 @@ if _github_credentials_available():
             per_page (int): Results per page (max 100)
             page (int): Page number
             save_as (str): Variable name to store the search results
-            
+
         Returns:
             pd.DataFrame: Search results as a DataFrame
+
         """
         code = f'{save_as} = search_issues_impl("{owner}", "{repo}"'
         if query:
             code += f', "{query}"'
         else:
-            code += f', None'
+            code += ", None"
         code += f', "{state}", '
         if labels:
             code += f'"{labels}"'
         else:
-            code += f'None'
+            code += "None"
         code += f', "{sort}", "{direction}", {per_page}, {page})\n{save_as}'
-        
+
         df = await run_code_in_shell(code)
         if isinstance(df, pd.DataFrame):
-            return df.to_dict('records')
-
+            return df.to_dict("records")
 
     # GitHub Pull Request Tools
     def _get_pull_request_impl(owner: str, repo: str, pull_number: int) -> pd.DataFrame:
-        """
-        Get details of a specific pull request from a GitHub repository.
-        
+        """Get details of a specific pull request from a GitHub repository.
+
         Args:
             owner (str): Repository owner
             repo (str): Repository name
             pull_number (int): Pull request number
-            
+
         Returns:
             pd.DataFrame: Pull request details as a DataFrame
+
         """
         session = _get_github_session()
-        
+
         url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pull_number}"
-        
+
         logger.info(f"Fetching GitHub pull request #{pull_number} from {owner}/{repo}")
         response = session.get(url)
         response.raise_for_status()
-        
+
         pr = response.json()
         logger.info(f"Retrieved pull request: {pr['title']}")
-        
+
         # Convert PR to DataFrame
         pr_data = {
-            'number': [pr['number']],
-            'title': [pr['title']],
-            'body': [pr.get('body', '')],
-            'state': [pr['state']],
-            'user_login': [pr['user']['login']],
-            'user_id': [pr['user']['id']],
-            'created_at': [pr['created_at']],
-            'updated_at': [pr['updated_at']],
-            'closed_at': [pr.get('closed_at')],
-            'merged_at': [pr.get('merged_at')],
-            'merge_commit_sha': [pr.get('merge_commit_sha')],
-            'head_ref': [pr['head']['ref']],
-            'head_sha': [pr['head']['sha']],
-            'base_ref': [pr['base']['ref']],
-            'base_sha': [pr['base']['sha']],
-            'draft': [pr.get('draft', False)],
-            'merged': [pr.get('merged', False)],
-            'mergeable': [pr.get('mergeable')],
-            'mergeable_state': [pr.get('mergeable_state')],
-            'comments': [pr['comments']],
-            'review_comments': [pr['review_comments']],
-            'commits': [pr['commits']],
-            'additions': [pr['additions']],
-            'deletions': [pr['deletions']],
-            'changed_files': [pr['changed_files']],
-            'labels': [', '.join([label['name'] for label in pr.get('labels', [])])],
-            'assignees': [', '.join([assignee['login'] for assignee in pr.get('assignees', [])])],
-            'requested_reviewers': [', '.join([reviewer['login'] for reviewer in pr.get('requested_reviewers', [])])],
-            'html_url': [pr['html_url']],
-            'diff_url': [pr['diff_url']],
-            'patch_url': [pr['patch_url']],
-            'owner': [owner],
-            'repo': [repo]
+            "number": [pr["number"]],
+            "title": [pr["title"]],
+            "body": [pr.get("body", "")],
+            "state": [pr["state"]],
+            "user_login": [pr["user"]["login"]],
+            "user_id": [pr["user"]["id"]],
+            "created_at": [pr["created_at"]],
+            "updated_at": [pr["updated_at"]],
+            "closed_at": [pr.get("closed_at")],
+            "merged_at": [pr.get("merged_at")],
+            "merge_commit_sha": [pr.get("merge_commit_sha")],
+            "head_ref": [pr["head"]["ref"]],
+            "head_sha": [pr["head"]["sha"]],
+            "base_ref": [pr["base"]["ref"]],
+            "base_sha": [pr["base"]["sha"]],
+            "draft": [pr.get("draft", False)],
+            "merged": [pr.get("merged", False)],
+            "mergeable": [pr.get("mergeable")],
+            "mergeable_state": [pr.get("mergeable_state")],
+            "comments": [pr["comments"]],
+            "review_comments": [pr["review_comments"]],
+            "commits": [pr["commits"]],
+            "additions": [pr["additions"]],
+            "deletions": [pr["deletions"]],
+            "changed_files": [pr["changed_files"]],
+            "labels": [", ".join([label["name"] for label in pr.get("labels", [])])],
+            "assignees": [
+                ", ".join([assignee["login"] for assignee in pr.get("assignees", [])])
+            ],
+            "requested_reviewers": [
+                ", ".join(
+                    [
+                        reviewer["login"]
+                        for reviewer in pr.get("requested_reviewers", [])
+                    ]
+                )
+            ],
+            "html_url": [pr["html_url"]],
+            "diff_url": [pr["diff_url"]],
+            "patch_url": [pr["patch_url"]],
+            "owner": [owner],
+            "repo": [repo],
         }
-        
+
         return pd.DataFrame(pr_data)
 
     _SHELL.push({"get_pull_request_impl": _get_pull_request_impl})
 
-
     @app.tool()
-    async def get_pull_request(owner: str, repo: str, pull_number: int, *, save_as: str) -> Optional[pd.DataFrame]:
-        """
-        Get details of a specific pull request from a GitHub repository.
-        
+    async def get_pull_request(
+        owner: str, repo: str, pull_number: int, *, save_as: str
+    ) -> pd.DataFrame | None:
+        """Get details of a specific pull request from a GitHub repository.
+
         Args:
             owner (str): Repository owner
             repo (str): Repository name
             pull_number (int): Pull request number
             save_as (str): Variable name to store the pull request details
-            
+
         Returns:
             pd.DataFrame: Pull request details as a DataFrame
+
         """
         code = f'{save_as} = get_pull_request_impl("{owner}", "{repo}", {pull_number})\n{save_as}'
         df = await run_code_in_shell(code)
         if isinstance(df, pd.DataFrame):
-            return df.to_dict('records')
+            return df.to_dict("records")
 
+    def _list_pull_requests_impl(
+        owner: str,
+        repo: str,
+        state: str = "open",
+        head: str | None = None,
+        base: str | None = None,
+        sort: str = "created",
+        direction: str = "desc",
+        per_page: int = 30,
+        page: int = 1,
+    ) -> pd.DataFrame:
+        """List pull requests in a GitHub repository.
 
-    def _list_pull_requests_impl(owner: str, repo: str, state: str = "open",
-                                head: Optional[str] = None, base: Optional[str] = None,
-                                sort: str = "created", direction: str = "desc",
-                                per_page: int = 30, page: int = 1) -> pd.DataFrame:
-        """
-        List pull requests in a GitHub repository.
-        
         Args:
             owner (str): Repository owner
             repo (str): Repository name
@@ -463,79 +542,108 @@ if _github_credentials_available():
             direction (str): Sort direction ('asc', 'desc')
             per_page (int): Results per page (max 100)
             page (int): Page number
-            
+
         Returns:
             pd.DataFrame: Pull requests as a DataFrame
+
         """
         session = _get_github_session()
-        
+
         url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
-        
+
         params = {
-            'state': state,
-            'sort': sort,
-            'direction': direction,
-            'per_page': min(per_page, 100),
-            'page': page
+            "state": state,
+            "sort": sort,
+            "direction": direction,
+            "per_page": min(per_page, 100),
+            "page": page,
         }
-        
+
         if head:
-            params['head'] = head
+            params["head"] = head
         if base:
-            params['base'] = base
-        
-        logger.info(f"Listing GitHub pull requests in {owner}/{repo} with state={state}")
+            params["base"] = base
+
+        logger.info(
+            f"Listing GitHub pull requests in {owner}/{repo} with state={state}"
+        )
         response = session.get(url, params=params)
         response.raise_for_status()
-        
+
         prs = response.json()
         logger.info(f"Found {len(prs)} pull requests")
-        
+
         if not prs:
-            return pd.DataFrame(columns=['number', 'title', 'body', 'state', 'user_login', 'created_at', 'updated_at', 'owner', 'repo'])
-        
+            return pd.DataFrame(
+                columns=[
+                    "number",
+                    "title",
+                    "body",
+                    "state",
+                    "user_login",
+                    "created_at",
+                    "updated_at",
+                    "owner",
+                    "repo",
+                ]
+            )
+
         # Convert PRs to DataFrame
         rows = []
         for pr in prs:
             row = {
-                'number': pr['number'],
-                'title': pr['title'],
-                'body': pr.get('body', ''),
-                'state': pr['state'],
-                'user_login': pr['user']['login'],
-                'user_id': pr['user']['id'],
-                'created_at': pr['created_at'],
-                'updated_at': pr['updated_at'],
-                'closed_at': pr.get('closed_at'),
-                'merged_at': pr.get('merged_at'),
-                'head_ref': pr['head']['ref'],
-                'head_sha': pr['head']['sha'],
-                'base_ref': pr['base']['ref'],
-                'base_sha': pr['base']['sha'],
-                'draft': pr.get('draft', False),
-                'merged': pr.get('merged', False),
-                'labels': ', '.join([label['name'] for label in pr.get('labels', [])]),
-                'assignees': ', '.join([assignee['login'] for assignee in pr.get('assignees', [])]),
-                'requested_reviewers': ', '.join([reviewer['login'] for reviewer in pr.get('requested_reviewers', [])]),
-                'html_url': pr['html_url'],
-                'owner': owner,
-                'repo': repo
+                "number": pr["number"],
+                "title": pr["title"],
+                "body": pr.get("body", ""),
+                "state": pr["state"],
+                "user_login": pr["user"]["login"],
+                "user_id": pr["user"]["id"],
+                "created_at": pr["created_at"],
+                "updated_at": pr["updated_at"],
+                "closed_at": pr.get("closed_at"),
+                "merged_at": pr.get("merged_at"),
+                "head_ref": pr["head"]["ref"],
+                "head_sha": pr["head"]["sha"],
+                "base_ref": pr["base"]["ref"],
+                "base_sha": pr["base"]["sha"],
+                "draft": pr.get("draft", False),
+                "merged": pr.get("merged", False),
+                "labels": ", ".join([label["name"] for label in pr.get("labels", [])]),
+                "assignees": ", ".join(
+                    [assignee["login"] for assignee in pr.get("assignees", [])]
+                ),
+                "requested_reviewers": ", ".join(
+                    [
+                        reviewer["login"]
+                        for reviewer in pr.get("requested_reviewers", [])
+                    ]
+                ),
+                "html_url": pr["html_url"],
+                "owner": owner,
+                "repo": repo,
             }
             rows.append(row)
-        
+
         return pd.DataFrame(rows)
 
     _SHELL.push({"list_pull_requests_impl": _list_pull_requests_impl})
 
-
     @app.tool()
-    async def list_pull_requests(owner: str, repo: str, state: str = "open",
-                                head: Optional[str] = None, base: Optional[str] = None,
-                                sort: str = "created", direction: str = "desc",
-                                per_page: int = 30, page: int = 1, *, save_as: str) -> Optional[pd.DataFrame]:
-        """
-        List pull requests in a GitHub repository.
-        
+    async def list_pull_requests(
+        owner: str,
+        repo: str,
+        state: str = "open",
+        head: str | None = None,
+        base: str | None = None,
+        sort: str = "created",
+        direction: str = "desc",
+        per_page: int = 30,
+        page: int = 1,
+        *,
+        save_as: str,
+    ) -> pd.DataFrame | None:
+        """List pull requests in a GitHub repository.
+
         Args:
             owner (str): Repository owner
             repo (str): Repository name
@@ -547,238 +655,293 @@ if _github_credentials_available():
             per_page (int): Results per page (max 100)
             page (int): Page number
             save_as (str): Variable name to store the pull request list
-            
+
         Returns:
             pd.DataFrame: Pull requests as a DataFrame
+
         """
         code = f'{save_as} = list_pull_requests_impl("{owner}", "{repo}", "{state}"'
         if head:
             code += f', "{head}"'
         else:
-            code += f', None'
+            code += ", None"
         if base:
             code += f', "{base}"'
         else:
-            code += f', None'
+            code += ", None"
         code += f', "{sort}", "{direction}", {per_page}, {page})\n{save_as}'
-        
+
         df = await run_code_in_shell(code)
         if isinstance(df, pd.DataFrame):
-            return df.to_dict('records')
+            return df.to_dict("records")
 
+    def _get_pull_request_files_impl(
+        owner: str, repo: str, pull_number: int
+    ) -> pd.DataFrame:
+        """Get files changed in a pull request.
 
-    def _get_pull_request_files_impl(owner: str, repo: str, pull_number: int) -> pd.DataFrame:
-        """
-        Get files changed in a pull request.
-        
         Args:
             owner (str): Repository owner
             repo (str): Repository name
             pull_number (int): Pull request number
-            
+
         Returns:
             pd.DataFrame: Files changed in the pull request
+
         """
         session = _get_github_session()
-        
+
         url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pull_number}/files"
-        
-        logger.info(f"Fetching files for GitHub pull request #{pull_number} from {owner}/{repo}")
+
+        logger.info(
+            f"Fetching files for GitHub pull request #{pull_number} from {owner}/{repo}"
+        )
         response = session.get(url)
         response.raise_for_status()
-        
+
         files = response.json()
         logger.info(f"Retrieved {len(files)} files for pull request #{pull_number}")
-        
+
         if not files:
-            return pd.DataFrame(columns=['filename', 'status', 'additions', 'deletions', 'changes', 'owner', 'repo', 'pull_number'])
-        
+            return pd.DataFrame(
+                columns=[
+                    "filename",
+                    "status",
+                    "additions",
+                    "deletions",
+                    "changes",
+                    "owner",
+                    "repo",
+                    "pull_number",
+                ]
+            )
+
         # Convert files to DataFrame
         rows = []
         for file in files:
             row = {
-                'filename': file['filename'],
-                'status': file['status'],
-                'additions': file['additions'],
-                'deletions': file['deletions'],
-                'changes': file['changes'],
-                'blob_url': file.get('blob_url'),
-                'raw_url': file.get('raw_url'),
-                'patch': file.get('patch', ''),
-                'owner': owner,
-                'repo': repo,
-                'pull_number': pull_number
+                "filename": file["filename"],
+                "status": file["status"],
+                "additions": file["additions"],
+                "deletions": file["deletions"],
+                "changes": file["changes"],
+                "blob_url": file.get("blob_url"),
+                "raw_url": file.get("raw_url"),
+                "patch": file.get("patch", ""),
+                "owner": owner,
+                "repo": repo,
+                "pull_number": pull_number,
             }
             rows.append(row)
-        
+
         return pd.DataFrame(rows)
 
     _SHELL.push({"get_pull_request_files_impl": _get_pull_request_files_impl})
 
-
     @app.tool()
-    async def get_pull_request_files(owner: str, repo: str, pull_number: int, *, save_as: str) -> Optional[pd.DataFrame]:
-        """
-        Get files changed in a pull request.
-        
+    async def get_pull_request_files(
+        owner: str, repo: str, pull_number: int, *, save_as: str
+    ) -> pd.DataFrame | None:
+        """Get files changed in a pull request.
+
         Args:
             owner (str): Repository owner
             repo (str): Repository name
             pull_number (int): Pull request number
             save_as (str): Variable name to store the file list
-            
+
         Returns:
             pd.DataFrame: Files changed in the pull request
+
         """
         code = f'{save_as} = get_pull_request_files_impl("{owner}", "{repo}", {pull_number})\n{save_as}'
         df = await run_code_in_shell(code)
         if isinstance(df, pd.DataFrame):
-            return df.to_dict('records')
+            return df.to_dict("records")
 
+    def _get_pull_request_comments_impl(
+        owner: str, repo: str, pull_number: int
+    ) -> pd.DataFrame:
+        """Get comments on a pull request.
 
-    def _get_pull_request_comments_impl(owner: str, repo: str, pull_number: int) -> pd.DataFrame:
-        """
-        Get comments on a pull request.
-        
         Args:
             owner (str): Repository owner
             repo (str): Repository name
             pull_number (int): Pull request number
-            
+
         Returns:
             pd.DataFrame: Comments on the pull request
+
         """
         session = _get_github_session()
-        
-        url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pull_number}/comments"
-        
-        logger.info(f"Fetching comments for GitHub pull request #{pull_number} from {owner}/{repo}")
+
+        url = (
+            f"https://api.github.com/repos/{owner}/{repo}/issues/{pull_number}/comments"
+        )
+
+        logger.info(
+            f"Fetching comments for GitHub pull request #{pull_number} from {owner}/{repo}"
+        )
         response = session.get(url)
         response.raise_for_status()
-        
+
         comments = response.json()
-        logger.info(f"Retrieved {len(comments)} comments for pull request #{pull_number}")
-        
+        logger.info(
+            f"Retrieved {len(comments)} comments for pull request #{pull_number}"
+        )
+
         if not comments:
-            return pd.DataFrame(columns=['id', 'user_login', 'body', 'created_at', 'updated_at', 'owner', 'repo', 'pull_number'])
-        
+            return pd.DataFrame(
+                columns=[
+                    "id",
+                    "user_login",
+                    "body",
+                    "created_at",
+                    "updated_at",
+                    "owner",
+                    "repo",
+                    "pull_number",
+                ]
+            )
+
         # Convert comments to DataFrame
         rows = []
         for comment in comments:
             row = {
-                'id': comment['id'],
-                'user_login': comment['user']['login'],
-                'user_id': comment['user']['id'],
-                'body': comment['body'],
-                'created_at': comment['created_at'],
-                'updated_at': comment['updated_at'],
-                'html_url': comment['html_url'],
-                'owner': owner,
-                'repo': repo,
-                'pull_number': pull_number
+                "id": comment["id"],
+                "user_login": comment["user"]["login"],
+                "user_id": comment["user"]["id"],
+                "body": comment["body"],
+                "created_at": comment["created_at"],
+                "updated_at": comment["updated_at"],
+                "html_url": comment["html_url"],
+                "owner": owner,
+                "repo": repo,
+                "pull_number": pull_number,
             }
             rows.append(row)
-        
+
         return pd.DataFrame(rows)
 
     _SHELL.push({"get_pull_request_comments_impl": _get_pull_request_comments_impl})
 
-
     @app.tool()
-    async def get_pull_request_comments(owner: str, repo: str, pull_number: int, *, save_as: str) -> Optional[pd.DataFrame]:
-        """
-        Get comments on a pull request.
-        
+    async def get_pull_request_comments(
+        owner: str, repo: str, pull_number: int, *, save_as: str
+    ) -> pd.DataFrame | None:
+        """Get comments on a pull request.
+
         Args:
             owner (str): Repository owner
             repo (str): Repository name
             pull_number (int): Pull request number
             save_as (str): Variable name to store the comments
-            
+
         Returns:
             pd.DataFrame: Comments on the pull request
+
         """
         code = f'{save_as} = get_pull_request_comments_impl("{owner}", "{repo}", {pull_number})\n{save_as}'
         df = await run_code_in_shell(code)
         if isinstance(df, pd.DataFrame):
-            return df.to_dict('records')
+            return df.to_dict("records")
 
+    def _get_pull_request_reviews_impl(
+        owner: str, repo: str, pull_number: int
+    ) -> pd.DataFrame:
+        """Get reviews on a pull request.
 
-    def _get_pull_request_reviews_impl(owner: str, repo: str, pull_number: int) -> pd.DataFrame:
-        """
-        Get reviews on a pull request.
-        
         Args:
             owner (str): Repository owner
             repo (str): Repository name
             pull_number (int): Pull request number
-            
+
         Returns:
             pd.DataFrame: Reviews on the pull request
+
         """
         session = _get_github_session()
-        
+
         url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pull_number}/reviews"
-        
-        logger.info(f"Fetching reviews for GitHub pull request #{pull_number} from {owner}/{repo}")
+
+        logger.info(
+            f"Fetching reviews for GitHub pull request #{pull_number} from {owner}/{repo}"
+        )
         response = session.get(url)
         response.raise_for_status()
-        
+
         reviews = response.json()
         logger.info(f"Retrieved {len(reviews)} reviews for pull request #{pull_number}")
-        
+
         if not reviews:
-            return pd.DataFrame(columns=['id', 'user_login', 'state', 'body', 'submitted_at', 'owner', 'repo', 'pull_number'])
-        
+            return pd.DataFrame(
+                columns=[
+                    "id",
+                    "user_login",
+                    "state",
+                    "body",
+                    "submitted_at",
+                    "owner",
+                    "repo",
+                    "pull_number",
+                ]
+            )
+
         # Convert reviews to DataFrame
         rows = []
         for review in reviews:
             row = {
-                'id': review['id'],
-                'user_login': review['user']['login'] if review['user'] else None,
-                'user_id': review['user']['id'] if review['user'] else None,
-                'state': review['state'],
-                'body': review.get('body', ''),
-                'submitted_at': review.get('submitted_at'),
-                'html_url': review['html_url'],
-                'owner': owner,
-                'repo': repo,
-                'pull_number': pull_number
+                "id": review["id"],
+                "user_login": review["user"]["login"] if review["user"] else None,
+                "user_id": review["user"]["id"] if review["user"] else None,
+                "state": review["state"],
+                "body": review.get("body", ""),
+                "submitted_at": review.get("submitted_at"),
+                "html_url": review["html_url"],
+                "owner": owner,
+                "repo": repo,
+                "pull_number": pull_number,
             }
             rows.append(row)
-        
+
         return pd.DataFrame(rows)
 
     _SHELL.push({"get_pull_request_reviews_impl": _get_pull_request_reviews_impl})
 
-
     @app.tool()
-    async def get_pull_request_reviews(owner: str, repo: str, pull_number: int, *, save_as: str) -> Optional[pd.DataFrame]:
-        """
-        Get reviews on a pull request.
-        
+    async def get_pull_request_reviews(
+        owner: str, repo: str, pull_number: int, *, save_as: str
+    ) -> pd.DataFrame | None:
+        """Get reviews on a pull request.
+
         Args:
             owner (str): Repository owner
             repo (str): Repository name
             pull_number (int): Pull request number
             save_as (str): Variable name to store the reviews
-            
+
         Returns:
             pd.DataFrame: Reviews on the pull request
+
         """
         code = f'{save_as} = get_pull_request_reviews_impl("{owner}", "{repo}", {pull_number})\n{save_as}'
         df = await run_code_in_shell(code)
         if isinstance(df, pd.DataFrame):
-            return df.to_dict('records')
+            return df.to_dict("records")
 
+    def _list_commits_impl(
+        owner: str,
+        repo: str,
+        sha: str | None = None,
+        path: str | None = None,
+        author: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        per_page: int = 30,
+        page: int = 1,
+    ) -> pd.DataFrame:
+        """List commits in a GitHub repository.
 
-    def _list_commits_impl(owner: str, repo: str, sha: Optional[str] = None,
-                          path: Optional[str] = None, author: Optional[str] = None,
-                          since: Optional[str] = None, until: Optional[str] = None,
-                          per_page: int = 30, page: int = 1) -> pd.DataFrame:
-        """
-        List commits in a GitHub repository.
-        
         Args:
             owner (str): Repository owner
             repo (str): Repository name
@@ -789,72 +952,90 @@ if _github_credentials_available():
             until (Optional[str]): ISO 8601 date string
             per_page (int): Results per page (max 100)
             page (int): Page number
-            
+
         Returns:
             pd.DataFrame: Commits as a DataFrame
+
         """
         session = _get_github_session()
-        
+
         url = f"https://api.github.com/repos/{owner}/{repo}/commits"
-        
-        params: Dict[str, Union[str, int]] = {
-            'per_page': min(per_page, 100),
-            'page': page
-        }
-        
+
+        params: dict[str, str | int] = {"per_page": min(per_page, 100), "page": page}
+
         if sha:
-            params['sha'] = sha
+            params["sha"] = sha
         if path:
-            params['path'] = path
+            params["path"] = path
         if author:
-            params['author'] = author
+            params["author"] = author
         if since:
-            params['since'] = since
+            params["since"] = since
         if until:
-            params['until'] = until
-        
+            params["until"] = until
+
         logger.info(f"Listing GitHub commits in {owner}/{repo}")
         response = session.get(url, params=params)
         response.raise_for_status()
-        
+
         commits = response.json()
         logger.info(f"Retrieved {len(commits)} commits")
-        
+
         if not commits:
-            return pd.DataFrame(columns=['sha', 'message', 'author_name', 'author_email', 'author_date', 'committer_name', 'committer_email', 'committer_date', 'owner', 'repo'])
-        
+            return pd.DataFrame(
+                columns=[
+                    "sha",
+                    "message",
+                    "author_name",
+                    "author_email",
+                    "author_date",
+                    "committer_name",
+                    "committer_email",
+                    "committer_date",
+                    "owner",
+                    "repo",
+                ]
+            )
+
         # Convert commits to DataFrame
         rows = []
         for commit in commits:
-            commit_data = commit['commit']
+            commit_data = commit["commit"]
             row = {
-                'sha': commit['sha'],
-                'message': commit_data['message'],
-                'author_name': commit_data['author']['name'],
-                'author_email': commit_data['author']['email'],
-                'author_date': commit_data['author']['date'],
-                'committer_name': commit_data['committer']['name'],
-                'committer_email': commit_data['committer']['email'],
-                'committer_date': commit_data['committer']['date'],
-                'html_url': commit['html_url'],
-                'owner': owner,
-                'repo': repo
+                "sha": commit["sha"],
+                "message": commit_data["message"],
+                "author_name": commit_data["author"]["name"],
+                "author_email": commit_data["author"]["email"],
+                "author_date": commit_data["author"]["date"],
+                "committer_name": commit_data["committer"]["name"],
+                "committer_email": commit_data["committer"]["email"],
+                "committer_date": commit_data["committer"]["date"],
+                "html_url": commit["html_url"],
+                "owner": owner,
+                "repo": repo,
             }
             rows.append(row)
-        
+
         return pd.DataFrame(rows)
 
     _SHELL.push({"list_commits_impl": _list_commits_impl})
 
-
     @app.tool()
-    async def list_commits(owner: str, repo: str, sha: Optional[str] = None,
-                          path: Optional[str] = None, author: Optional[str] = None,
-                          since: Optional[str] = None, until: Optional[str] = None,
-                          per_page: int = 30, page: int = 1, *, save_as: str) -> Optional[pd.DataFrame]:
-        """
-        List commits in a GitHub repository.
-        
+    async def list_commits(
+        owner: str,
+        repo: str,
+        sha: str | None = None,
+        path: str | None = None,
+        author: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        per_page: int = 30,
+        page: int = 1,
+        *,
+        save_as: str,
+    ) -> pd.DataFrame | None:
+        """List commits in a GitHub repository.
+
         Args:
             owner (str): Repository owner
             repo (str): Repository name
@@ -866,91 +1047,97 @@ if _github_credentials_available():
             per_page (int): Results per page (max 100)
             page (int): Page number
             save_as (str): Variable name to store the commit list
-            
+
         Returns:
             pd.DataFrame: Commits as a DataFrame
+
         """
         code = f'{save_as} = list_commits_impl("{owner}", "{repo}"'
         if sha:
             code += f', "{sha}"'
         else:
-            code += f', None'
+            code += ", None"
         if path:
             code += f', "{path}"'
         else:
-            code += f', None'
+            code += ", None"
         if author:
             code += f', "{author}"'
         else:
-            code += f', None'
+            code += ", None"
         if since:
             code += f', "{since}"'
         else:
-            code += f', None'
+            code += ", None"
         if until:
             code += f', "{until}"'
         else:
-            code += f', None'
-        code += f', {per_page}, {page})\n{save_as}'
-        
+            code += ", None"
+        code += f", {per_page}, {page})\n{save_as}"
+
         df = await run_code_in_shell(code)
         if isinstance(df, pd.DataFrame):
-            return df.to_dict('records')
+            return df.to_dict("records")
 
+    def _get_commit_details_impl(
+        owner: str, repo: str, commit_sha: str
+    ) -> pd.DataFrame:
+        """Get detailed information about a specific commit.
 
-    def _get_commit_details_impl(owner: str, repo: str, commit_sha: str) -> pd.DataFrame:
-        """
-        Get detailed information about a specific commit.
-        
         Args:
             owner (str): Repository owner
             repo (str): Repository name
             commit_sha (str): Commit SHA
-            
+
         Returns:
             pd.DataFrame: Detailed commit information
+
         """
         session = _get_github_session()
-        
+
         url = f"https://api.github.com/repos/{owner}/{repo}/commits/{commit_sha}"
-        
+
         logger.info(f"Fetching commit details for {commit_sha} from {owner}/{repo}")
         response = session.get(url)
         response.raise_for_status()
-        
+
         commit = response.json()
         logger.info(f"Retrieved commit: {commit['commit']['message'][:50]}...")
-        
+
         # Convert commit to DataFrame
-        commit_data = commit['commit']
-        stats = commit.get('stats', {})
-        
+        commit_data = commit["commit"]
+        stats = commit.get("stats", {})
+
         row = {
-            'sha': commit['sha'],
-            'message': commit_data['message'],
-            'author_name': commit_data['author']['name'],
-            'author_email': commit_data['author']['email'],
-            'author_date': commit_data['author']['date'],
-            'committer_name': commit_data['committer']['name'],
-            'committer_email': commit_data['committer']['email'],
-            'committer_date': commit_data['committer']['date'],
-            'additions': stats.get('additions', 0),
-            'deletions': stats.get('deletions', 0),
-            'total_changes': stats.get('total', 0),
-            'files_changed': len(commit.get('files', [])),
-            'html_url': commit['html_url'],
-            'owner': owner,
-            'repo': repo
+            "sha": commit["sha"],
+            "message": commit_data["message"],
+            "author_name": commit_data["author"]["name"],
+            "author_email": commit_data["author"]["email"],
+            "author_date": commit_data["author"]["date"],
+            "committer_name": commit_data["committer"]["name"],
+            "committer_email": commit_data["committer"]["email"],
+            "committer_date": commit_data["committer"]["date"],
+            "additions": stats.get("additions", 0),
+            "deletions": stats.get("deletions", 0),
+            "total_changes": stats.get("total", 0),
+            "files_changed": len(commit.get("files", [])),
+            "html_url": commit["html_url"],
+            "owner": owner,
+            "repo": repo,
         }
-        
+
         return pd.DataFrame([row])
 
-    def _analyze_file_commits_around_issue_impl(owner: str, repo: str, issue_number: int, 
-                                              file_paths: Optional[list] = None,
-                                              days_before: int = 7, days_after: int = 1) -> pd.DataFrame:
-        """
-        Analyze commits to specific files around the time an issue was created.
-        
+    def _analyze_file_commits_around_issue_impl(
+        owner: str,
+        repo: str,
+        issue_number: int,
+        file_paths: list | None = None,
+        days_before: int = 7,
+        days_after: int = 1,
+    ) -> pd.DataFrame:
+        """Analyze commits to specific files around the time an issue was created.
+
         Args:
             owner (str): Repository owner
             repo (str): Repository name
@@ -958,133 +1145,170 @@ if _github_credentials_available():
             file_paths (Optional[list]): List of file paths to analyze (if None, analyzes all commits)
             days_before (int): Number of days before issue creation to look
             days_after (int): Number of days after issue creation to look
-            
+
         Returns:
             pd.DataFrame: Commits around the issue timeframe
+
         """
-        from datetime import datetime, timedelta
+        from datetime import timedelta
+
         import dateutil.parser
-        
+
         session = _get_github_session()
-        
+
         # First get the issue to find its creation date
         issue_url = f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}"
         issue_response = session.get(issue_url)
         issue_response.raise_for_status()
         issue = issue_response.json()
-        
-        issue_created = dateutil.parser.parse(issue['created_at'])
+
+        issue_created = dateutil.parser.parse(issue["created_at"])
         since_date = issue_created - timedelta(days=days_before)
         until_date = issue_created + timedelta(days=days_after)
-        
-        logger.info(f"Analyzing commits around issue #{issue_number} created on {issue_created}")
+
+        logger.info(
+            f"Analyzing commits around issue #{issue_number} created on {issue_created}"
+        )
         logger.info(f"Looking for commits between {since_date} and {until_date}")
-        
+
         all_commits = []
-        
+
         if file_paths:
             # Analyze commits for each specific file path
             for file_path in file_paths:
                 commits_url = f"https://api.github.com/repos/{owner}/{repo}/commits"
                 params = {
-                    'path': file_path,
-                    'since': since_date.isoformat(),
-                    'until': until_date.isoformat(),
-                    'per_page': 100
+                    "path": file_path,
+                    "since": since_date.isoformat(),
+                    "until": until_date.isoformat(),
+                    "per_page": 100,
                 }
-                
+
                 logger.info(f"Fetching commits for file: {file_path}")
                 response = session.get(commits_url, params=params)
                 response.raise_for_status()
-                
+
                 commits = response.json()
                 for commit in commits:
-                    commit_data = commit['commit']
-                    all_commits.append({
-                        'sha': commit['sha'],
-                        'message': commit_data['message'],
-                        'author_name': commit_data['author']['name'],
-                        'author_email': commit_data['author']['email'],
-                        'author_date': commit_data['author']['date'],
-                        'committer_date': commit_data['committer']['date'],
-                        'file_path': file_path,
-                        'html_url': commit['html_url'],
-                        'issue_number': issue_number,
-                        'issue_created_at': issue['created_at'],
-                        'days_from_issue': (dateutil.parser.parse(commit_data['author']['date']) - issue_created).days,
-                        'owner': owner,
-                        'repo': repo
-                    })
+                    commit_data = commit["commit"]
+                    all_commits.append(
+                        {
+                            "sha": commit["sha"],
+                            "message": commit_data["message"],
+                            "author_name": commit_data["author"]["name"],
+                            "author_email": commit_data["author"]["email"],
+                            "author_date": commit_data["author"]["date"],
+                            "committer_date": commit_data["committer"]["date"],
+                            "file_path": file_path,
+                            "html_url": commit["html_url"],
+                            "issue_number": issue_number,
+                            "issue_created_at": issue["created_at"],
+                            "days_from_issue": (
+                                dateutil.parser.parse(commit_data["author"]["date"])
+                                - issue_created
+                            ).days,
+                            "owner": owner,
+                            "repo": repo,
+                        }
+                    )
         else:
             # Analyze all commits in the timeframe
             commits_url = f"https://api.github.com/repos/{owner}/{repo}/commits"
             params = {
-                'since': since_date.isoformat(),
-                'until': until_date.isoformat(),
-                'per_page': 100
+                "since": since_date.isoformat(),
+                "until": until_date.isoformat(),
+                "per_page": 100,
             }
-            
+
             logger.info("Fetching all commits in timeframe")
             response = session.get(commits_url, params=params)
             response.raise_for_status()
-            
+
             commits = response.json()
             for commit in commits:
-                commit_data = commit['commit']
-                all_commits.append({
-                    'sha': commit['sha'],
-                    'message': commit_data['message'],
-                    'author_name': commit_data['author']['name'],
-                    'author_email': commit_data['author']['email'],
-                    'author_date': commit_data['author']['date'],
-                    'committer_date': commit_data['committer']['date'],
-                    'file_path': None,
-                    'html_url': commit['html_url'],
-                    'issue_number': issue_number,
-                    'issue_created_at': issue['created_at'],
-                    'days_from_issue': (dateutil.parser.parse(commit_data['author']['date']) - issue_created).days,
-                    'owner': owner,
-                    'repo': repo
-                })
-        
+                commit_data = commit["commit"]
+                all_commits.append(
+                    {
+                        "sha": commit["sha"],
+                        "message": commit_data["message"],
+                        "author_name": commit_data["author"]["name"],
+                        "author_email": commit_data["author"]["email"],
+                        "author_date": commit_data["author"]["date"],
+                        "committer_date": commit_data["committer"]["date"],
+                        "file_path": None,
+                        "html_url": commit["html_url"],
+                        "issue_number": issue_number,
+                        "issue_created_at": issue["created_at"],
+                        "days_from_issue": (
+                            dateutil.parser.parse(commit_data["author"]["date"])
+                            - issue_created
+                        ).days,
+                        "owner": owner,
+                        "repo": repo,
+                    }
+                )
+
         logger.info(f"Found {len(all_commits)} commits around issue #{issue_number}")
-        
+
         if not all_commits:
-            return pd.DataFrame(columns=['sha', 'message', 'author_name', 'author_email', 'author_date', 'file_path', 'issue_number', 'days_from_issue', 'owner', 'repo'])
-        
+            return pd.DataFrame(
+                columns=[
+                    "sha",
+                    "message",
+                    "author_name",
+                    "author_email",
+                    "author_date",
+                    "file_path",
+                    "issue_number",
+                    "days_from_issue",
+                    "owner",
+                    "repo",
+                ]
+            )
+
         return pd.DataFrame(all_commits)
 
-    _SHELL.push({"get_commit_details_impl": _get_commit_details_impl, "analyze_file_commits_around_issue_impl": _analyze_file_commits_around_issue_impl})
-
+    _SHELL.push(
+        {
+            "get_commit_details_impl": _get_commit_details_impl,
+            "analyze_file_commits_around_issue_impl": _analyze_file_commits_around_issue_impl,
+        }
+    )
 
     @app.tool()
-    async def get_commit_details(owner: str, repo: str, commit_sha: str, *, save_as: str) -> Optional[pd.DataFrame]:
-        """
-        Get detailed information about a specific commit.
-        
+    async def get_commit_details(
+        owner: str, repo: str, commit_sha: str, *, save_as: str
+    ) -> pd.DataFrame | None:
+        """Get detailed information about a specific commit.
+
         Args:
             owner (str): Repository owner
             repo (str): Repository name
             commit_sha (str): Commit SHA
             save_as (str): Variable name to store the commit details
-            
+
         Returns:
             pd.DataFrame: Detailed commit information
+
         """
         code = f'{save_as} = get_commit_details_impl("{owner}", "{repo}", "{commit_sha}")\n{save_as}'
         df = await run_code_in_shell(code)
         if isinstance(df, pd.DataFrame):
-            return df.to_dict('records')
-
+            return df.to_dict("records")
 
     @app.tool()
-    async def analyze_file_commits_around_issue(owner: str, repo: str, issue_number: int,
-                                              file_paths: Optional[str] = None,
-                                              days_before: int = 7, days_after: int = 1, 
-                                              *, save_as: str) -> Optional[pd.DataFrame]:
-        """
-        Analyze commits to specific files around the time an issue was created.
-        
+    async def analyze_file_commits_around_issue(
+        owner: str,
+        repo: str,
+        issue_number: int,
+        file_paths: str | None = None,
+        days_before: int = 7,
+        days_after: int = 1,
+        *,
+        save_as: str,
+    ) -> pd.DataFrame | None:
+        """Analyze commits to specific files around the time an issue was created.
+
         Args:
             owner (str): Repository owner
             repo (str): Repository name
@@ -1093,24 +1317,25 @@ if _github_credentials_available():
             days_before (int): Number of days before issue creation to look
             days_after (int): Number of days after issue creation to look
             save_as (str): Variable name to store the analysis results
-            
+
         Returns:
             pd.DataFrame: Commits around the issue timeframe
+
         """
         file_list = None
         if file_paths:
-            file_list = [path.strip() for path in file_paths.split(',')]
-        
+            file_list = [path.strip() for path in file_paths.split(",")]
+
         code = f'{save_as} = analyze_file_commits_around_issue_impl("{owner}", "{repo}", {issue_number}'
         if file_list:
-            code += f', {file_list}'
+            code += f", {file_list}"
         else:
-            code += f', None'
-        code += f', {days_before}, {days_after})\n{save_as}'
-        
+            code += ", None"
+        code += f", {days_before}, {days_after})\n{save_as}"
+
         df = await run_code_in_shell(code)
         if isinstance(df, pd.DataFrame):
-            return df.to_dict('records')
+            return df.to_dict("records")
 
 else:
-    logger.info("GitHub PAT token not detected - GitHub tools will not be registered") 
+    logger.info("GitHub PAT token not detected - GitHub tools will not be registered")

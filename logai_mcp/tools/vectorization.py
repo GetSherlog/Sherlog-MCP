@@ -7,22 +7,20 @@ Refactored to follow the `filesystem_tools.py` pattern:
     • Helpers are exposed to the shell through `_SHELL.push(...)`.
 """
 
-from typing import Any, Dict
+from typing import Any
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+from logai.information_extraction.categorical_encoder import (
+    CategoricalEncoder,
+    CategoricalEncoderConfig,
+)
+from logai.information_extraction.log_vectorizer import LogVectorizer, VectorizerConfig
 
+from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 from logai_mcp.session import (
     app,
 )
-
-from logai.information_extraction.log_vectorizer import VectorizerConfig, LogVectorizer
-from logai.information_extraction.categorical_encoder import (
-    CategoricalEncoderConfig,
-    CategoricalEncoder,
-)
-
-from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 
 # ---------------------------------------------------------------------------
 # Vectorise parsed log templates
@@ -32,7 +30,7 @@ from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 def _vectorize_log_data_impl(
     parsed_loglines: Any,
     algo_name: str = "word2vec",
-    vectorizer_params: Dict | None = None,
+    vectorizer_params: dict | None = None,
 ) -> np.ndarray:
     """Convert textual log data into numerical feature vectors (NumPy array).
 
@@ -96,8 +94,8 @@ def _vectorize_log_data_impl(
     - The `parsed_loglines` input is resolved using `_resolve`.
     - Input data is converted to a pandas Series of strings before processing.
     - The LogAI `LogVectorizer` is used for fitting and transforming the data.
-    """
 
+    """
     if isinstance(parsed_loglines, (list, tuple)):
         series = pd.Series(parsed_loglines, dtype=str)
     elif isinstance(parsed_loglines, pd.Series):
@@ -131,7 +129,7 @@ def _vectorize_log_data_impl(
 def _encode_log_attributes_impl(
     attributes: Any,
     encoder_name: str = "label_encoder",
-    encoder_params: Dict | None = None,
+    encoder_params: dict | None = None,
 ) -> np.ndarray:
     """Encode categorical log attributes into a numerical NumPy array.
 
@@ -201,8 +199,8 @@ def _encode_log_attributes_impl(
       already numerical data (e.g., feature vectors from `vectorize_log_data`
       or numerical columns like counts or measurements) to this tool. Doing so
       will likely lead to unintended behavior or errors.
-    """
 
+    """
     if isinstance(attributes, pd.DataFrame):
         df = attributes
     elif isinstance(attributes, pd.Series):
@@ -226,17 +224,19 @@ def _encode_log_attributes_impl(
     return encoded
 
 
-_SHELL.push({
-    "_vectorize_log_data_impl": _vectorize_log_data_impl,
-    "_encode_log_attributes_impl": _encode_log_attributes_impl,
-})
+_SHELL.push(
+    {
+        "_vectorize_log_data_impl": _vectorize_log_data_impl,
+        "_encode_log_attributes_impl": _encode_log_attributes_impl,
+    }
+)
 
 
 @app.tool()
 async def vectorize_log_data(
     parsed_loglines: Any,
     algo_name: str = "word2vec",
-    vectorizer_params: Dict | None = None,
+    vectorizer_params: dict | None = None,
     *,
     save_as: str,
 ):
@@ -301,11 +301,9 @@ async def vectorize_log_data(
     - The `parsed_loglines` input is resolved using `_resolve`.
     - Input data is converted to a pandas Series of strings before processing.
     - The LogAI `LogVectorizer` is used for fitting and transforming the data.
-    """
 
-    code = (
-        f"{save_as} = _vectorize_log_data_impl({repr(parsed_loglines)}, {repr(algo_name)}, {repr(vectorizer_params)})\n"
-    )
+    """
+    code = f"{save_as} = _vectorize_log_data_impl({repr(parsed_loglines)}, {repr(algo_name)}, {repr(vectorizer_params)})\n"
     return await run_code_in_shell(code)
 
 
@@ -316,7 +314,7 @@ vectorize_log_data.__doc__ = _vectorize_log_data_impl.__doc__
 async def encode_log_attributes(
     attributes: Any,
     encoder_name: str = "label_encoder",
-    encoder_params: Dict | None = None,
+    encoder_params: dict | None = None,
     *,
     save_as: str,
 ):
@@ -388,11 +386,9 @@ async def encode_log_attributes(
       already numerical data (e.g., feature vectors from `vectorize_log_data`
       or numerical columns like counts or measurements) to this tool. Doing so
       will likely lead to unintended behavior or errors.
-    """
 
-    code = (
-        f"{save_as} = _encode_log_attributes_impl({repr(attributes)}, {repr(encoder_name)}, {repr(encoder_params)})\n"
-    )
+    """
+    code = f"{save_as} = _encode_log_attributes_impl({repr(attributes)}, {repr(encoder_name)}, {repr(encoder_params)})\n"
     return await run_code_in_shell(code)
 
 
