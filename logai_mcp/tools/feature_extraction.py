@@ -161,7 +161,8 @@ async def extract_log_features(
     ts_arg = timestamps if isinstance(timestamps, str) else repr(timestamps)
 
     code = f"{save_as} = _extract_log_features_impl({lv_arg}, {ae_arg}, {ts_arg}, {max_feature_len})\n"
-    return await run_code_in_shell(code)
+    execution_result = await run_code_in_shell(code)
+    return execution_result.result if execution_result else None
 
 
 extract_log_features.__doc__ = _extract_log_features_impl.__doc__
@@ -287,7 +288,8 @@ async def extract_timeseries_features(
         f"{save_as} = _extract_timeseries_features_impl({pl_arg}, {attrs_arg}, {ts_arg}, "
         f"{repr(group_by_time)}, {repr(group_by_category)}, {repr(feature_extractor_params)})\n"
     )
-    return await run_code_in_shell(code)
+    execution_result = await run_code_in_shell(code)
+    return execution_result.result if execution_result else None
 
 
 extract_timeseries_features.__doc__ = _extract_timeseries_features_impl.__doc__

@@ -83,7 +83,8 @@ session_meta: dict[str, dict[str, Any]] = {}
 
 logger = logging.getLogger("LogAIMCP")
 if not logger.handlers:
-    _handler = logging.StreamHandler()
+    import sys
+    _handler = logging.StreamHandler(sys.stderr)
     _handler.setFormatter(
         logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
     )

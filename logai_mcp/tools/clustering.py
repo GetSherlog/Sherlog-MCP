@@ -172,7 +172,8 @@ async def cluster_log_features(
         f"    {repr(feature_vector)}, {repr(algo_name)}, {n_clusters}, {repr(clustering_params)})\n"
         f"{save_as}"
     )
-    return await run_code_in_shell(code)
+    execution_result = await run_code_in_shell(code)
+    return execution_result.result if execution_result else None
 
 
 cluster_log_features.__doc__ = _cluster_log_features_impl.__doc__

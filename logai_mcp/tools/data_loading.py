@@ -28,7 +28,8 @@ _SHELL.push({"_get_log_file_columns_impl": _get_log_file_columns_impl})
 async def get_log_file_columns(file_path: str, save_as: str):
     """Wrapper that assigns `_get_log_file_columns_impl` result to `save_as` in the shell."""
     code = f"{save_as} = _get_log_file_columns_impl({repr(file_path)})\n{save_as}"
-    return await run_code_in_shell(code)
+    execution_result = await run_code_in_shell(code)
+    return execution_result.result if execution_result else None
 
 
 get_log_file_columns.__doc__ = _get_log_file_columns_impl.__doc__
@@ -131,8 +132,9 @@ async def load_file_log_data(
     save_as: str,
 ) -> pd.DataFrame | None:
     """Wrapper that assigns `_load_file_log_data_impl` result to `save_as` in the shell."""
-    code = f"{save_as} = _load_file_log_data_impl({repr(file_path)}, {repr(dimensions)}, {repr(log_type)}, {repr(infer_datetime)}, {repr(datetime_format)})\n"
-    return await run_code_in_shell(code)
+    code = f"{save_as} = _load_file_log_data_impl({repr(file_path)}, {repr(dimensions)}, {repr(log_type)}, {repr(infer_datetime)}, {repr(datetime_format)})\n{save_as}"
+    execution_result = await run_code_in_shell(code)
+    return execution_result.result if execution_result else None
 
 
 def _default_dimension_mapping(cols: list[str]) -> pd.DataFrame:
@@ -241,4 +243,5 @@ async def suggest_dimension_mapping(
 
     """
     code = f"{save_as} = _suggest_dimension_mapping_impl({repr(file_path)})\n{save_as}"
-    return await run_code_in_shell(code)
+    execution_result = await run_code_in_shell(code)
+    return execution_result.result if execution_result else None

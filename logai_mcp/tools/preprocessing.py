@@ -79,7 +79,8 @@ async def preprocess_log_data(
 ):
     """Wrapper for `_preprocess_log_data_impl`, saves outputs to shell variables."""
     code = f"{save_clean_as}, {save_patterns_as}, {save_attributes_as} = _preprocess_log_data_impl({log_record}, {repr(custom_replace_list)})\n"
-    return await run_code_in_shell(code)
+    execution_result = await run_code_in_shell(code)
+    return execution_result.result if execution_result else None
 
 
 preprocess_log_data.__doc__ = _preprocess_log_data_impl.__doc__
@@ -147,7 +148,8 @@ async def parse_log_data(
         f"{save_as} = _parse_log_data_impl({clean_logs}, {repr(parsing_algorithm)})\n"
         f"{save_as}"
     )
-    return await run_code_in_shell(code)
+    execution_result = await run_code_in_shell(code)
+    return execution_result.result if execution_result else None
 
 
 parse_log_data.__doc__ = _parse_log_data_impl.__doc__

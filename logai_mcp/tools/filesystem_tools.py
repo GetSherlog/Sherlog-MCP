@@ -391,7 +391,8 @@ if _filesystem_available():
         You can then use this DataFrame (defined by *save_as*) in subsequent steps.
         """
         code = f'{save_as} = await _read_file_impl("{file_path}")'
-        return await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     @app.tool()
     async def list_directory(dir_path: str, save_as: str) -> pd.DataFrame | None:
@@ -406,7 +407,8 @@ if _filesystem_available():
 
         """
         code = f'{save_as} = await _list_directory_impl("{dir_path}")'
-        return await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     @app.tool()
     async def directory_tree(path: str, save_as: str) -> pd.DataFrame | None:
@@ -422,7 +424,8 @@ if _filesystem_available():
 
         """
         code = f'{save_as} = await _directory_tree_impl("{path}")'
-        return await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     @app.tool()
     async def search_files(
@@ -443,7 +446,8 @@ if _filesystem_available():
 
         """
         code = f'{save_as} = await _search_files_impl("{path}", "{pattern}", "{exclude_patterns}", "{recursive}")'
-        return await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     @app.tool()
     async def get_file_info(path: str, save_as: str) -> pd.DataFrame | None:
@@ -460,7 +464,8 @@ if _filesystem_available():
 
         """
         code = f'{save_as} = await _get_file_info_impl("{path}")'
-        return await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     @app.tool()
     async def list_allowed_directories() -> pd.DataFrame | None:
@@ -473,7 +478,8 @@ if _filesystem_available():
             A Pandas DataFrame with a single column 'allowed_directory_path'.
 
         """
-        return await run_code_in_shell("_list_allowed_directories_impl()")
+        execution_result = await run_code_in_shell("_list_allowed_directories_impl()")
+        return execution_result.result if execution_result else None
 
     @app.tool()
     def peek_file(file_path: str, n_lines: int = 10) -> list[str]:

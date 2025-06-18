@@ -264,15 +264,15 @@ def register_external_tool(
                 save_as=save_as,
             )
 
-            result = await run_code_in_shell(code)
+            execution_result = await run_code_in_shell(code)
 
             try:
                 shell_result = _SHELL.user_ns.get(save_as)
                 if isinstance(shell_result, (pd.DataFrame, pl.DataFrame)):
                     return to_json_serializable(shell_result)
-                return result
+                return execution_result.result if execution_result else None
             except:
-                return result
+                return execution_result.result if execution_result else None
 
         tool_impl.__name__ = full_tool_name
         tool_impl.__doc__ = "\n".join(doc_lines)
@@ -322,10 +322,15 @@ def generate_tool_execution_code(
     code = f"""
 # Execute external MCP tool: {mcp_name}.{tool_name}
 import asyncio
+import sys
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 import pandas as pd
 import numpy as np
+import logging
+
+# Configure logging to use stderr
+logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 
 {env_setup}
 
@@ -375,30 +380,44 @@ async def _execute_external_tool():
                 else:
                     return result
                 
+    except asyncio.CancelledError as e:
+        import sys
+        error_msg = f"Operation cancelled for {mcp_name}.{tool_name}: Task was cancelled due to timeout or external interruption"
+        print(error_msg, file=sys.stderr)
+        raise Exception(error_msg)
     except asyncio.TimeoutError as e:
-        import logging
-        logger = logging.getLogger(__name__)
+        import sys
         error_msg = f"Timeout error executing {mcp_name}.{tool_name}: Operation exceeded time limit"
-        logger.error(f"{{error_msg}}: {{e}}")
+        print(error_msg, file=sys.stderr)
         raise Exception(error_msg)
     except (ConnectionError, OSError, IOError) as e:
-        import logging
-        logger = logging.getLogger(__name__)
+        import sys
         error_msg = f"Connection error executing {mcp_name}.{tool_name}: Failed to connect or communicate with external MCP"
-        logger.error(f"{{error_msg}}: {{e}}")
+        print(f"{{error_msg}}: {{e}}", file=sys.stderr)
         raise Exception(error_msg)
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
+        import sys
         error_msg = f"Error executing {mcp_name}.{tool_name}: " + str(e)
-        logger.error(error_msg)
+        print(error_msg, file=sys.stderr)
         raise Exception(error_msg)
 
 # Execute the async function with comprehensive error handling
 try:
     _result = await _execute_external_tool()
+except asyncio.CancelledError as e:
+    # Handle cancellation specifically 
+    error_details = {{
+        "error": "Operation was cancelled due to timeout or interruption",
+        "error_type": "CancelledError", 
+        "tool": "{tool_name}",
+        "mcp": "{mcp_name}",
+        "suggestion": "The operation was cancelled, likely due to timeout. Try breaking large operations into smaller chunks or using alternative approaches."
+    }}
+    _result = error_details
+    import sys
+    print(f"External MCP tool execution cancelled: Operation timeout or interruption", file=sys.stderr)
 except Exception as e:
-    # Capture any exception and return as structured error
+    # Capture any other exception and return as structured error
     error_details = {{
         "error": str(e),
         "error_type": type(e).__name__,
@@ -407,16 +426,17 @@ except Exception as e:
         "suggestion": "Try alternative approaches if this was a timeout or large file operation"
     }}
     _result = error_details
-    print(f"External MCP tool execution failed: {{str(e)}}")
+    import sys
+    print(f"External MCP tool execution failed: {{str(e)}}", file=sys.stderr)
 
 # Convert to DataFrame if possible
 {save_as} = convert_to_dataframe(_result)
 
-# Display result info
-print(f"Result stored in '{save_as}'")
+# Store result info in a variable instead of printing
+_result_info = f"Result stored in '{save_as}'"
 if isinstance({save_as}, pd.DataFrame):
-    print(f"DataFrame shape: {{{save_as}.shape}}")
-    print(f"Columns: {{{save_as}.columns.tolist()}}")
+    _result_info += f"\\nDataFrame shape: {{{save_as}.shape}}"
+    _result_info += f"\\nColumns: {{{save_as}.columns.tolist()}}"
 
 {save_as}
 """
@@ -439,19 +459,9 @@ def convert_to_dataframe(data: Any) -> pd.DataFrame | Any:
 
     """
     try:
-        # Avoid blindly converting plain dicts (e.g. {"foo": "bar"}) into a
-        # single-row DataFrame – that tends to break JSON-serialisation and makes
-        # the response harder to consume programme-matically.  We only convert to
-        # a DataFrame when the structure *looks* tabular (list/sequence of
-        # mappings or sequences of equal length).
-
         _should_convert = True
 
         if isinstance(data, dict):
-            # Heuristics:
-            # 1. Every value is list-like OR
-            # 2. Value count > 1 and at least one value is list-like.
-            # Otherwise, keep as-is.
             list_like_values = [
                 isinstance(v, (list, tuple)) for v in data.values()
             ]

@@ -88,7 +88,8 @@ if _docker_available():
 
         """
         code = f"{save_as} = list_containers_impl()\n" + f"{save_as}"
-        df = await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        df = execution_result.result if execution_result else None
         if isinstance(df, pd.DataFrame):
             return df.to_dict("records")
 
@@ -130,7 +131,8 @@ if _docker_available():
             f'{save_as} = get_container_logs_impl("{container_id}", "{tail}")\n'
             + f"{save_as}"
         )
-        return await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
 else:
     logger.info("Docker daemon not detected - Docker tools will not be registered")

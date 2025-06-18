@@ -304,7 +304,8 @@ async def vectorize_log_data(
 
     """
     code = f"{save_as} = _vectorize_log_data_impl({repr(parsed_loglines)}, {repr(algo_name)}, {repr(vectorizer_params)})\n"
-    return await run_code_in_shell(code)
+    execution_result = await run_code_in_shell(code)
+    return execution_result.result if execution_result else None
 
 
 vectorize_log_data.__doc__ = _vectorize_log_data_impl.__doc__
@@ -389,7 +390,8 @@ async def encode_log_attributes(
 
     """
     code = f"{save_as} = _encode_log_attributes_impl({repr(attributes)}, {repr(encoder_name)}, {repr(encoder_params)})\n"
-    return await run_code_in_shell(code)
+    execution_result = await run_code_in_shell(code)
+    return execution_result.result if execution_result else None
 
 
 encode_log_attributes.__doc__ = _encode_log_attributes_impl.__doc__

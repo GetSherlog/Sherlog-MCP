@@ -538,7 +538,7 @@ if _codebase_path_available():
         class_name: str | None = None,
         *,
         save_as: str = "method_results",
-    ) -> pd.DataFrame | None:
+    ) -> list[dict] | None:
         """Find method implementation(s) by exact name in configured programming languages.
 
         Args:
@@ -547,7 +547,7 @@ if _codebase_path_available():
             save_as: Variable name to save results in IPython shell
 
         Returns:
-            pd.DataFrame: Method implementations found
+            list[dict]: Method implementations found as list of dictionaries
 
         """
         if class_name:
@@ -555,14 +555,16 @@ if _codebase_path_available():
         else:
             code = f'{save_as} = _find_method_implementation_impl("{method_name}")\n{save_as}'
 
-        df = await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        df = execution_result.result if execution_result else None
         if isinstance(df, pd.DataFrame):
             return df.to_dict("records")
+        return None
 
     @app.tool()
     async def find_class_implementation(
         class_name: str, *, save_as: str = "class_results"
-    ) -> pd.DataFrame | None:
+    ) -> list[dict] | None:
         """Find class implementation(s) by exact name in configured programming languages.
 
         Args:
@@ -570,67 +572,75 @@ if _codebase_path_available():
             save_as: Variable name to save results in IPython shell
 
         Returns:
-            pd.DataFrame: Class implementations found
+            list of dictionaries: Class implementations found
 
         """
         code = f'{save_as} = _find_class_implementation_impl("{class_name}")\n{save_as}'
 
-        df = await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        df = execution_result.result if execution_result else None
         if isinstance(df, pd.DataFrame):
             return df.to_dict("records")
+        return None
 
     @app.tool()
-    async def list_all_methods(*, save_as: str = "all_methods") -> pd.DataFrame | None:
+    async def list_all_methods(*, save_as: str = "all_methods") -> list[dict] | None:
         """List all methods in the configured programming languages.
 
         Args:
             save_as: Variable name to save results in IPython shell
 
         Returns:
-            pd.DataFrame: All methods with their class names and file paths
+            list of dictionaries: All methods with their class names and file paths
 
         """
         code = f"{save_as} = _list_all_methods_impl()\n{save_as}"
 
-        df = await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        df = execution_result.result if execution_result else None
         if isinstance(df, pd.DataFrame):
             return df.to_dict("records")
+        return None
 
     @app.tool()
-    async def list_all_classes(*, save_as: str = "all_classes") -> pd.DataFrame | None:
+    async def list_all_classes(*, save_as: str = "all_classes") -> list[dict] | None:
         """List all classes in the configured programming languages.
 
         Args:
             save_as: Variable name to save results in IPython shell
 
         Returns:
-            pd.DataFrame: All classes with their file paths
+            list of dictionaries: All classes with their file paths
 
         """
         code = f"{save_as} = _list_all_classes_impl()\n{save_as}"
 
-        df = await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        df = execution_result.result if execution_result else None
         if isinstance(df, pd.DataFrame):
             return df.to_dict("records")
+        return None
 
     @app.tool()
     async def get_codebase_stats(
         *, save_as: str = "codebase_stats"
-    ) -> pd.DataFrame | None:
+    ) -> list[dict] | None:
         """Get statistics about the configured codebase.
 
         Args:
             save_as: Variable name to save results in IPython shell
 
         Returns:
-            pd.DataFrame: Statistics about file types and counts in the codebase
+            list of dictionaries: Statistics about file types and counts in the codebase
 
         """
         code = f"{save_as} = _get_codebase_stats_impl()\n{save_as}"
 
-        df = await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        df = execution_result.result if execution_result else None
         if isinstance(df, pd.DataFrame):
             return df.to_dict("records")
+        return None
 
     @app.tool()
     async def configure_supported_languages(

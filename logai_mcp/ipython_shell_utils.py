@@ -10,10 +10,12 @@ from logai_mcp.session import app, logger
 _SHELL: InteractiveShell = InteractiveShell.instance()
 _SHELL.reset()
 
+_SHELL.ast_node_interactivity = "none"
+_SHELL.colors = "NoColor"
+
 _SHELL.run_line_magic("load_ext", "autoreload")
 _SHELL.run_line_magic("autoreload", "2")
-_SHELL.run_line_magic("xmode", "Verbose")
-_SHELL.run_line_magic("pdb", "on")
+_SHELL.run_line_magic("xmode", "Minimal")
 
 _SHELL.Completer = IPCompleter(shell=_SHELL, use_jedi=False)
 
@@ -42,7 +44,7 @@ async def run_code_in_shell(code: str):
     if execution_result.error_in_exec:
         raise execution_result.error_in_exec
 
-    return execution_result.result
+    return execution_result
 
 
 @app.tool()
@@ -119,8 +121,14 @@ async def execute_python_code(code: str):
             error_type = type(result.error_in_exec).__name__
             error_msg = str(result.error_in_exec)
             execution_details_dict["error_in_exec"] = f"{error_type}: {error_msg}"
-            if hasattr(result, 'traceback') and result.traceback:
-                execution_details_dict["traceback"] = result.traceback[:8192]
+            try:
+                import sys
+                import traceback
+                if sys.exc_info()[0] is not None:
+                    tb_lines = traceback.format_exc()
+                    execution_details_dict["traceback"] = tb_lines[:8192]
+            except Exception:
+                pass
 
     if stdout_value:
         execution_details_dict["stdout"] = stdout_value.rstrip()

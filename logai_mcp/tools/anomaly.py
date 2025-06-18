@@ -284,7 +284,8 @@ async def detect_timeseries_anomalies(
         f"    {train_split_ratio})\n"
         f"({save_scores_as}, {save_anomalies_as})"
     )
-    return await run_code_in_shell(code)
+    execution_result = await run_code_in_shell(code)
+    return execution_result.result if execution_result else None
 
 
 detect_timeseries_anomalies.__doc__ = _detect_timeseries_anomalies_impl.__doc__
@@ -308,7 +309,8 @@ async def detect_semantic_anomalies(
         f"    {train_split_ratio})\n"
         f"({save_predictions_as}, {save_anomalous_indices_as})"
     )
-    return await run_code_in_shell(code)
+    execution_result = await run_code_in_shell(code)
+    return execution_result.result if execution_result else None
 
 
 detect_semantic_anomalies.__doc__ = _detect_semantic_anomalies_impl.__doc__

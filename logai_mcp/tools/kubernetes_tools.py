@@ -724,7 +724,8 @@ if _kubernetes_available():
 
         """
         code = f"{save_as} = list_namespaces_impl()\n{save_as}"
-        df = await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        df = execution_result.result if execution_result else None
         if isinstance(df, pd.DataFrame):
             return df.to_dict("records")
 
@@ -748,7 +749,8 @@ if _kubernetes_available():
             code += f', "{label_selector}"'
         code += f")\n{save_as}"
 
-        df = await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        df = execution_result.result if execution_result else None
         if isinstance(df, pd.DataFrame):
             return df.to_dict("records")
 
@@ -781,7 +783,8 @@ if _kubernetes_available():
             code += ", None"
         code += f", {tail_lines})\n{save_as}"
 
-        return await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     @app.tool()
     async def list_services(
@@ -798,7 +801,8 @@ if _kubernetes_available():
 
         """
         code = f'{save_as} = list_services_impl("{namespace}")\n{save_as}'
-        df = await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        df = execution_result.result if execution_result else None
         if isinstance(df, pd.DataFrame):
             return df.to_dict("records")
 
@@ -817,7 +821,8 @@ if _kubernetes_available():
 
         """
         code = f'{save_as} = list_deployments_impl("{namespace}")\n{save_as}'
-        df = await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        df = execution_result.result if execution_result else None
         if isinstance(df, pd.DataFrame):
             return df.to_dict("records")
 
@@ -837,7 +842,8 @@ if _kubernetes_available():
 
         """
         code = f'{save_as} = list_events_impl("{namespace}", {limit})\n{save_as}'
-        df = await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        df = execution_result.result if execution_result else None
         if isinstance(df, pd.DataFrame):
             return df.to_dict("records")
 
@@ -859,7 +865,8 @@ if _kubernetes_available():
         code = (
             f'{save_as} = get_pod_details_impl("{pod_name}", "{namespace}")\n{save_as}'
         )
-        df = await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        df = execution_result.result if execution_result else None
         if isinstance(df, pd.DataFrame):
             return df.to_dict("records")
 
@@ -875,7 +882,8 @@ if _kubernetes_available():
 
         """
         code = f"{save_as} = list_nodes_impl()\n{save_as}"
-        df = await run_code_in_shell(code)
+        execution_result = await run_code_in_shell(code)
+        df = execution_result.result if execution_result else None
         if isinstance(df, pd.DataFrame):
             return df.to_dict("records")
 
