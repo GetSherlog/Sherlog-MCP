@@ -17,6 +17,53 @@ import nltk.downloader
 from mcp.server.fastmcp import FastMCP
 from logai_mcp.config import get_settings
 
+# Monkey-patch pydantic_core.to_json to handle scientific objects
+import pydantic_core
+_original_to_json = pydantic_core.to_json
+
+def _enhanced_to_json(value, *, fallback=None, **kwargs):
+    """Enhanced JSON serializer that handles pandas/numpy objects."""
+    
+    def _convert_scientific_objects(obj):
+        """Convert scientific objects to JSON-serializable formats."""
+        try:
+            import pandas as pd
+            if isinstance(obj, pd.DataFrame):
+                return obj.to_dict(orient="records")
+            elif isinstance(obj, pd.Series):
+                return obj.to_dict()
+        except ImportError:
+            pass
+        
+        try:
+            import numpy as np
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, (np.integer, np.floating)):
+                return obj.item()
+        except ImportError:
+            pass
+        
+        try:
+            import polars as pl
+            if isinstance(obj, pl.DataFrame):
+                return obj.to_dicts()
+        except ImportError:
+            pass
+        
+        return obj
+    
+    try:
+        converted_value = _convert_scientific_objects(value)
+        if converted_value is not value:
+            return _original_to_json(converted_value, fallback=fallback, **kwargs)
+    except Exception:
+        pass
+    
+    return _original_to_json(value, fallback=fallback, **kwargs)
+
+pydantic_core.to_json = _enhanced_to_json
+
 app = FastMCP(name="LogAIMCP", stateless_http=True)
 
 @app.custom_route("/health", methods=["GET"])
@@ -46,7 +93,11 @@ if not logger.handlers:
 settings = get_settings()
 logger.setLevel(getattr(logging, settings.log_level.upper(), logging.INFO))
 
-SESSION_FILE = Path("session_state.pkl")
+
+SESSIONS_DIR = Path(".mcp_session")
+SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+SESSION_FILE = SESSIONS_DIR / "session_state.pkl"
 
 def save_session():
     """Save current session state"""

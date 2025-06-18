@@ -1,9 +1,7 @@
 """Code retrieval tools for finding and extracting method and class implementations."""
 
 from typing import List, Optional, Tuple
-import logging
 import os
-from pathlib import Path
 import pandas as pd
 
 from logai_mcp.session import app, logger
@@ -12,6 +10,18 @@ from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 
 from .treesitter_parser import Treesitter, LanguageEnum
 from .file_loading import load_files
+
+
+def _codebase_path_available() -> bool:
+    """Check if codebase path is configured and exists."""
+    try:
+        settings = get_settings()
+        if not settings.codebase_path:
+            return False
+        return os.path.exists(settings.codebase_path)
+    except Exception:
+        return False
+
 
 def get_language_enum(language_str: str) -> Optional[LanguageEnum]:
     """Convert language string to LanguageEnum."""
@@ -452,169 +462,176 @@ _SHELL.push({
     "_get_codebase_stats_impl": _get_codebase_stats_impl,
 })
 
-# MCP Tool implementations
+# Conditional tool registration based on codebase path availability
+if _codebase_path_available():
+    logger.info("Codebase path detected - registering code retrieval tools")
 
-@app.tool()
-async def find_method_implementation(
-    method_name: str,
-    class_name: Optional[str] = None,
-    *,
-    save_as: str = "method_results"
-) -> Optional[pd.DataFrame]:
-    """
-    Find method implementation(s) by exact name in configured programming languages.
-    
-    Args:
-        method_name: The exact name of the method to find
-        class_name: Optional class name to narrow down search
-        save_as: Variable name to save results in IPython shell
-        
-    Returns:
-        pd.DataFrame: Method implementations found
-    """
-    if class_name:
-        code = f'{save_as} = _find_method_implementation_impl("{method_name}", "{class_name}")\n{save_as}'
-    else:
-        code = f'{save_as} = _find_method_implementation_impl("{method_name}")\n{save_as}'
-    
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
+    # MCP Tool implementations
 
-@app.tool()
-async def find_class_implementation(
-    class_name: str,
-    *,
-    save_as: str = "class_results"
-) -> Optional[pd.DataFrame]:
-    """
-    Find class implementation(s) by exact name in configured programming languages.
-    
-    Args:
-        class_name: The exact name of the class to find
-        save_as: Variable name to save results in IPython shell
+    @app.tool()
+    async def find_method_implementation(
+        method_name: str,
+        class_name: Optional[str] = None,
+        *,
+        save_as: str = "method_results"
+    ) -> Optional[pd.DataFrame]:
+        """
+        Find method implementation(s) by exact name in configured programming languages.
         
-    Returns:
-        pd.DataFrame: Class implementations found
-    """
-    code = f'{save_as} = _find_class_implementation_impl("{class_name}")\n{save_as}'
-    
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
-
-@app.tool()
-async def list_all_methods(
-    *,
-    save_as: str = "all_methods"
-) -> Optional[pd.DataFrame]:
-    """
-    List all methods in the configured programming languages.
-    
-    Args:
-        save_as: Variable name to save results in IPython shell
-        
-    Returns:
-        pd.DataFrame: All methods with their class names and file paths
-    """
-    code = f'{save_as} = _list_all_methods_impl()\n{save_as}'
-    
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
-
-@app.tool()
-async def list_all_classes(
-    *,
-    save_as: str = "all_classes"
-) -> Optional[pd.DataFrame]:
-    """
-    List all classes in the configured programming languages.
-    
-    Args:
-        save_as: Variable name to save results in IPython shell
-        
-    Returns:
-        pd.DataFrame: All classes with their file paths
-    """
-    code = f'{save_as} = _list_all_classes_impl()\n{save_as}'
-    
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
-
-@app.tool()
-async def get_codebase_stats(
-    *,
-    save_as: str = "codebase_stats"
-) -> Optional[pd.DataFrame]:
-    """
-    Get statistics about the configured codebase.
-    
-    Args:
-        save_as: Variable name to save results in IPython shell
-        
-    Returns:
-        pd.DataFrame: Statistics about file types and counts in the codebase
-    """
-    code = f'{save_as} = _get_codebase_stats_impl()\n{save_as}'
-    
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
-
-@app.tool()
-async def configure_supported_languages(
-    languages: List[str],
-    *,
-    save_as: str = "language_config"
-) -> str:
-    """
-    Configure which programming languages to analyze in the codebase.
-    
-    Args:
-        languages: List of language names to support. Valid options: java, kotlin, python, typescript, javascript, cpp, rust
-        save_as: Variable name to save configuration in IPython shell
-        
-    Returns:
-        Confirmation message with the updated language configuration
-    """
-    valid_languages = {'java', 'kotlin', 'python', 'typescript', 'javascript', 'cpp', 'rust'}
-    
-    # Validate languages
-    invalid_languages = []
-    valid_requested = []
-    
-    for lang in languages:
-        lang_lower = lang.lower().strip()
-        if lang_lower in valid_languages:
-            valid_requested.append(lang_lower)
+        Args:
+            method_name: The exact name of the method to find
+            class_name: Optional class name to narrow down search
+            save_as: Variable name to save results in IPython shell
+            
+        Returns:
+            pd.DataFrame: Method implementations found
+        """
+        if class_name:
+            code = f'{save_as} = _find_method_implementation_impl("{method_name}", "{class_name}")\n{save_as}'
         else:
-            invalid_languages.append(lang)
-    
-    if invalid_languages:
-        return f"Error: Invalid languages specified: {invalid_languages}. Valid options: {sorted(valid_languages)}"
-    
-    if not valid_requested:
-        return "Error: No valid languages specified."
-    
-    try:
-        # Save to shell variable
-        config_line = f"{save_as} = {repr(valid_requested)}"
-        print_line = f"print('Configured ' + str(len({save_as})) + ' languages: ' + ', '.join({save_as}))"
-        code = config_line + "\n" + print_line
-        await run_code_in_shell(code)
+            code = f'{save_as} = _find_method_implementation_impl("{method_name}")\n{save_as}'
         
-        result_msg = [
-            f"Successfully configured {len(valid_requested)} languages for code analysis:",
-            f"  Enabled: {', '.join(sorted(valid_requested))}",
-            "",
-            "Note: This configuration is for this session only.",
-            "To make it permanent, set the SUPPORTED_LANGUAGES environment variable.",
-            f"Example: SUPPORTED_LANGUAGES={','.join(valid_requested)}"
-        ]
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
+
+    @app.tool()
+    async def find_class_implementation(
+        class_name: str,
+        *,
+        save_as: str = "class_results"
+    ) -> Optional[pd.DataFrame]:
+        """
+        Find class implementation(s) by exact name in configured programming languages.
         
-        return "\n".join(result_msg)
-    except Exception as e:
-        logger.error(f"Error configuring languages: {e}")
-        return f"Error: {e}" 
+        Args:
+            class_name: The exact name of the class to find
+            save_as: Variable name to save results in IPython shell
+            
+        Returns:
+            pd.DataFrame: Class implementations found
+        """
+        code = f'{save_as} = _find_class_implementation_impl("{class_name}")\n{save_as}'
+        
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
+
+    @app.tool()
+    async def list_all_methods(
+        *,
+        save_as: str = "all_methods"
+    ) -> Optional[pd.DataFrame]:
+        """
+        List all methods in the configured programming languages.
+        
+        Args:
+            save_as: Variable name to save results in IPython shell
+            
+        Returns:
+            pd.DataFrame: All methods with their class names and file paths
+        """
+        code = f'{save_as} = _list_all_methods_impl()\n{save_as}'
+        
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
+
+    @app.tool()
+    async def list_all_classes(
+        *,
+        save_as: str = "all_classes"
+    ) -> Optional[pd.DataFrame]:
+        """
+        List all classes in the configured programming languages.
+        
+        Args:
+            save_as: Variable name to save results in IPython shell
+            
+        Returns:
+            pd.DataFrame: All classes with their file paths
+        """
+        code = f'{save_as} = _list_all_classes_impl()\n{save_as}'
+        
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
+
+    @app.tool()
+    async def get_codebase_stats(
+        *,
+        save_as: str = "codebase_stats"
+    ) -> Optional[pd.DataFrame]:
+        """
+        Get statistics about the configured codebase.
+        
+        Args:
+            save_as: Variable name to save results in IPython shell
+            
+        Returns:
+            pd.DataFrame: Statistics about file types and counts in the codebase
+        """
+        code = f'{save_as} = _get_codebase_stats_impl()\n{save_as}'
+        
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
+
+    @app.tool()
+    async def configure_supported_languages(
+        languages: List[str],
+        *,
+        save_as: str = "language_config"
+    ) -> str:
+        """
+        Configure which programming languages to analyze in the codebase.
+        
+        Args:
+            languages: List of language names to support. Valid options: java, kotlin, python, typescript, javascript, cpp, rust
+            save_as: Variable name to save configuration in IPython shell
+            
+        Returns:
+            Confirmation message with the updated language configuration
+        """
+        valid_languages = {'java', 'kotlin', 'python', 'typescript', 'javascript', 'cpp', 'rust'}
+        
+        # Validate languages
+        invalid_languages = []
+        valid_requested = []
+        
+        for lang in languages:
+            lang_lower = lang.lower().strip()
+            if lang_lower in valid_languages:
+                valid_requested.append(lang_lower)
+            else:
+                invalid_languages.append(lang)
+        
+        if invalid_languages:
+            return f"Error: Invalid languages specified: {invalid_languages}. Valid options: {sorted(valid_languages)}"
+        
+        if not valid_requested:
+            return "Error: No valid languages specified."
+        
+        try:
+            # Save to shell variable
+            config_line = f"{save_as} = {repr(valid_requested)}"
+            print_line = f"print('Configured ' + str(len({save_as})) + ' languages: ' + ', '.join({save_as}))"
+            code = config_line + "\n" + print_line
+            await run_code_in_shell(code)
+            
+            result_msg = [
+                f"Successfully configured {len(valid_requested)} languages for code analysis:",
+                f"  Enabled: {', '.join(sorted(valid_requested))}",
+                "",
+                "Note: This configuration is for this session only.",
+                "To make it permanent, set the SUPPORTED_LANGUAGES environment variable.",
+                f"Example: SUPPORTED_LANGUAGES={','.join(valid_requested)}"
+            ]
+            
+            return "\n".join(result_msg)
+        except Exception as e:
+            logger.error(f"Error configuring languages: {e}")
+            return f"Error: {e}"
+
+else:
+    logger.info("Codebase path not detected - code retrieval tools will not be registered") 

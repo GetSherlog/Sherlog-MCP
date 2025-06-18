@@ -21,3 +21,6 @@ omni-search-*.json
 
 # Log files
 *.log
+
+# Pickle files
+*.pkl

@@ -18,6 +18,26 @@ from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 from logai_mcp.config import get_settings
 
 
+def _kubernetes_available() -> bool:
+    """Check if Kubernetes cluster is accessible."""
+    try:
+        settings = get_settings()
+        
+        if hasattr(settings, 'kubeconfig_path') and settings.kubeconfig_path:
+            config.load_kube_config(config_file=settings.kubeconfig_path)
+        else:
+            try:
+                config.load_incluster_config()
+            except config.ConfigException:
+                config.load_kube_config()
+        
+        v1 = client.CoreV1Api()
+        v1.list_namespace(limit=1)
+        return True
+    except Exception:
+        return False
+
+
 def _get_k8s_client():
     """Get configured Kubernetes client."""
     try:
@@ -584,164 +604,164 @@ _SHELL.push({
 })
 
 
-# MCP Tool implementations
+# Conditional tool registration based on Kubernetes availability
+if _kubernetes_available():
+    logger.info("Kubernetes cluster detected - registering Kubernetes tools")
 
-@app.tool()
-async def list_namespaces(*, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    List all namespaces in the Kubernetes cluster.
-    
-    Args:
-        save_as (str): Variable name to store the namespaces data
+    # MCP Tool implementations
+
+    @app.tool()
+    async def list_namespaces(*, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        List all namespaces in the Kubernetes cluster.
         
-    Returns:
-        pd.DataFrame: Namespaces data as a DataFrame
-    """
-    code = f'{save_as} = list_namespaces_impl()\n{save_as}'
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
+        Args:
+            save_as (str): Variable name to store the namespaces data
+            
+        Returns:
+            pd.DataFrame: Namespaces data as a DataFrame
+        """
+        code = f'{save_as} = list_namespaces_impl()\n{save_as}'
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
 
-
-@app.tool()
-async def list_pods(namespace: str = "default", label_selector: Optional[str] = None, 
-                   *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    List pods in a specific namespace or all namespaces.
-    
-    Args:
-        namespace (str): Namespace to list pods from, use "all" for all namespaces
-        label_selector (Optional[str]): Label selector to filter pods (e.g., "app=nginx")
-        save_as (str): Variable name to store the pods data
+    @app.tool()
+    async def list_pods(namespace: str = "default", label_selector: Optional[str] = None, 
+                       *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        List pods in a specific namespace or all namespaces.
         
-    Returns:
-        pd.DataFrame: Pods data as a DataFrame
-    """
-    code = f'{save_as} = list_pods_impl("{namespace}"'
-    if label_selector:
-        code += f', "{label_selector}"'
-    code += f')\n{save_as}'
-    
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
-
-
-@app.tool()
-async def get_pod_logs(pod_name: str, namespace: str = "default",
-                      container: Optional[str] = None, tail_lines: int = 100,
-                      *, save_as: str) -> Optional[str]:
-    """
-    Get logs from a specific pod.
-    
-    Args:
-        pod_name (str): Name of the pod
-        namespace (str): Namespace of the pod
-        container (Optional[str]): Specific container name (if pod has multiple containers)
-        tail_lines (int): Number of log lines to retrieve from the end
-        save_as (str): Variable name to store the logs
+        Args:
+            namespace (str): Namespace to list pods from, use "all" for all namespaces
+            label_selector (Optional[str]): Label selector to filter pods (e.g., "app=nginx")
+            save_as (str): Variable name to store the pods data
+            
+        Returns:
+            pd.DataFrame: Pods data as a DataFrame
+        """
+        code = f'{save_as} = list_pods_impl("{namespace}"'
+        if label_selector:
+            code += f', "{label_selector}"'
+        code += f')\n{save_as}'
         
-    Returns:
-        str: Pod logs
-    """
-    code = f'{save_as} = get_pod_logs_impl("{pod_name}", "{namespace}"'
-    if container:
-        code += f', "{container}"'
-    else:
-        code += ', None'
-    code += f', {tail_lines})\n{save_as}'
-    
-    return await run_code_in_shell(code)
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
 
-
-@app.tool()
-async def list_services(namespace: str = "default", *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    List services in a specific namespace or all namespaces.
-    
-    Args:
-        namespace (str): Namespace to list services from, use "all" for all namespaces
-        save_as (str): Variable name to store the services data
+    @app.tool()
+    async def get_pod_logs(pod_name: str, namespace: str = "default",
+                          container: Optional[str] = None, tail_lines: int = 100,
+                          *, save_as: str) -> Optional[str]:
+        """
+        Get logs from a specific pod.
         
-    Returns:
-        pd.DataFrame: Services data as a DataFrame
-    """
-    code = f'{save_as} = list_services_impl("{namespace}")\n{save_as}'
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
-
-
-@app.tool()
-async def list_deployments(namespace: str = "default", *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    List deployments in a specific namespace or all namespaces.
-    
-    Args:
-        namespace (str): Namespace to list deployments from, use "all" for all namespaces
-        save_as (str): Variable name to store the deployments data
+        Args:
+            pod_name (str): Name of the pod
+            namespace (str): Namespace of the pod
+            container (Optional[str]): Specific container name (if pod has multiple containers)
+            tail_lines (int): Number of log lines to retrieve from the end
+            save_as (str): Variable name to store the logs
+            
+        Returns:
+            str: Pod logs
+        """
+        code = f'{save_as} = get_pod_logs_impl("{pod_name}", "{namespace}"'
+        if container:
+            code += f', "{container}"'
+        else:
+            code += ', None'
+        code += f', {tail_lines})\n{save_as}'
         
-    Returns:
-        pd.DataFrame: Deployments data as a DataFrame
-    """
-    code = f'{save_as} = list_deployments_impl("{namespace}")\n{save_as}'
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
+        return await run_code_in_shell(code)
 
-
-@app.tool()
-async def list_events(namespace: str = "default", limit: int = 100, 
-                     *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    List recent events in a specific namespace or all namespaces.
-    
-    Args:
-        namespace (str): Namespace to list events from, use "all" for all namespaces
-        limit (int): Maximum number of events to retrieve
-        save_as (str): Variable name to store the events data
+    @app.tool()
+    async def list_services(namespace: str = "default", *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        List services in a specific namespace or all namespaces.
         
-    Returns:
-        pd.DataFrame: Events data as a DataFrame
-    """
-    code = f'{save_as} = list_events_impl("{namespace}", {limit})\n{save_as}'
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
+        Args:
+            namespace (str): Namespace to list services from, use "all" for all namespaces
+            save_as (str): Variable name to store the services data
+            
+        Returns:
+            pd.DataFrame: Services data as a DataFrame
+        """
+        code = f'{save_as} = list_services_impl("{namespace}")\n{save_as}'
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
 
+    @app.tool()
+    async def list_deployments(namespace: str = "default", *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        List deployments in a specific namespace or all namespaces.
+        
+        Args:
+            namespace (str): Namespace to list deployments from, use "all" for all namespaces
+            save_as (str): Variable name to store the deployments data
+            
+        Returns:
+            pd.DataFrame: Deployments data as a DataFrame
+        """
+        code = f'{save_as} = list_deployments_impl("{namespace}")\n{save_as}'
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
 
-@app.tool()
-async def get_pod_details(pod_name: str, namespace: str = "default", 
+    @app.tool()
+    async def list_events(namespace: str = "default", limit: int = 100, 
                          *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    Get detailed information about a specific pod.
-    
-    Args:
-        pod_name (str): Name of the pod
-        namespace (str): Namespace of the pod
-        save_as (str): Variable name to store the pod details
+        """
+        List recent events in a specific namespace or all namespaces.
         
-    Returns:
-        pd.DataFrame: Detailed pod information as a DataFrame
-    """
-    code = f'{save_as} = get_pod_details_impl("{pod_name}", "{namespace}")\n{save_as}'
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
+        Args:
+            namespace (str): Namespace to list events from, use "all" for all namespaces
+            limit (int): Maximum number of events to retrieve
+            save_as (str): Variable name to store the events data
+            
+        Returns:
+            pd.DataFrame: Events data as a DataFrame
+        """
+        code = f'{save_as} = list_events_impl("{namespace}", {limit})\n{save_as}'
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
 
-
-@app.tool()
-async def list_nodes(*, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    List all nodes in the Kubernetes cluster.
-    
-    Args:
-        save_as (str): Variable name to store the nodes data
+    @app.tool()
+    async def get_pod_details(pod_name: str, namespace: str = "default", 
+                             *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        Get detailed information about a specific pod.
         
-    Returns:
-        pd.DataFrame: Nodes data as a DataFrame
-    """
-    code = f'{save_as} = list_nodes_impl()\n{save_as}'
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records') 
+        Args:
+            pod_name (str): Name of the pod
+            namespace (str): Namespace of the pod
+            save_as (str): Variable name to store the pod details
+            
+        Returns:
+            pd.DataFrame: Detailed pod information as a DataFrame
+        """
+        code = f'{save_as} = get_pod_details_impl("{pod_name}", "{namespace}")\n{save_as}'
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
+
+    @app.tool()
+    async def list_nodes(*, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        List all nodes in the Kubernetes cluster.
+        
+        Args:
+            save_as (str): Variable name to store the nodes data
+            
+        Returns:
+            pd.DataFrame: Nodes data as a DataFrame
+        """
+        code = f'{save_as} = list_nodes_impl()\n{save_as}'
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
+
+else:
+    logger.info("Kubernetes cluster not detected - Kubernetes tools will not be registered") 

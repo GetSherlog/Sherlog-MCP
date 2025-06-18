@@ -1,9 +1,8 @@
 from IPython.core.interactiveshell import InteractiveShell
 from logai_mcp.session import app, logger
-from typing import Optional, Dict, List, Any, Tuple
+from typing import Optional, Dict, Any
 import io
 import contextlib
-import ast
 
 
 _SHELL: InteractiveShell = InteractiveShell.instance()

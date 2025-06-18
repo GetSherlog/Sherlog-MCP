@@ -15,6 +15,15 @@ from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 from logai_mcp.config import get_settings
 
 
+def _sentry_credentials_available() -> bool:
+    """Check if Sentry credentials are available."""
+    try:
+        settings = get_settings()
+        return bool(settings.sentry_auth_token)
+    except Exception:
+        return False
+
+
 def _get_sentry_session():
     """Create a requests session with Sentry authentication headers."""
     settings = get_settings()
@@ -488,195 +497,195 @@ _SHELL.push({
 })
 
 
-# MCP Tool implementations
+# Conditional tool registration based on Sentry credentials
+if _sentry_credentials_available():
+    logger.info("Sentry credentials detected - registering Sentry tools")
 
-@app.tool()
-async def list_projects(organization_slug: str, *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    List all accessible Sentry projects for a given organization.
-    
-    Args:
-        organization_slug (str): The slug of the organization to list projects from
-        save_as (str): Variable name to store the projects data
+    # MCP Tool implementations
+
+    @app.tool()
+    async def list_projects(organization_slug: str, *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        List all accessible Sentry projects for a given organization.
         
-    Returns:
-        pd.DataFrame: Projects data as a DataFrame
-    """
-    code = f'{save_as} = list_projects_impl("{organization_slug}")\n{save_as}'
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
+        Args:
+            organization_slug (str): The slug of the organization to list projects from
+            save_as (str): Variable name to store the projects data
+            
+        Returns:
+            pd.DataFrame: Projects data as a DataFrame
+        """
+        code = f'{save_as} = list_projects_impl("{organization_slug}")\n{save_as}'
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
 
-
-@app.tool()
-async def get_sentry_issue(organization_slug: str, issue_id: str, *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    Retrieve and analyze a Sentry issue by ID.
-    
-    Args:
-        organization_slug (str): The slug of the organization
-        issue_id (str): The issue ID to retrieve
-        save_as (str): Variable name to store the issue data
+    @app.tool()
+    async def get_sentry_issue(organization_slug: str, issue_id: str, *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        Retrieve and analyze a Sentry issue by ID.
         
-    Returns:
-        pd.DataFrame: Issue data as a DataFrame
-    """
-    code = f'{save_as} = get_sentry_issue_impl("{organization_slug}", "{issue_id}")\n{save_as}'
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
+        Args:
+            organization_slug (str): The slug of the organization
+            issue_id (str): The issue ID to retrieve
+            save_as (str): Variable name to store the issue data
+            
+        Returns:
+            pd.DataFrame: Issue data as a DataFrame
+        """
+        code = f'{save_as} = get_sentry_issue_impl("{organization_slug}", "{issue_id}")\n{save_as}'
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
 
-
-@app.tool()
-async def list_project_issues(organization_slug: str, project_slug: str, 
-                             query: Optional[str] = None, status: str = "unresolved",
-                             sort: str = "date", limit: int = 25, *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    List issues from a specific Sentry project.
-    
-    Args:
-        organization_slug (str): The slug of the organization
-        project_slug (str): The slug of the project
-        query (Optional[str]): Search query to filter issues
-        status (str): Issue status filter ('resolved', 'unresolved', 'ignored')
-        sort (str): Sort order ('date', 'new', 'priority', 'freq', 'user')
-        limit (int): Maximum number of issues to return
-        save_as (str): Variable name to store the issues data
+    @app.tool()
+    async def list_project_issues(organization_slug: str, project_slug: str, 
+                                 query: Optional[str] = None, status: str = "unresolved",
+                                 sort: str = "date", limit: int = 25, *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        List issues from a specific Sentry project.
         
-    Returns:
-        pd.DataFrame: Issues data as a DataFrame
-    """
-    code = f'{save_as} = list_project_issues_impl("{organization_slug}", "{project_slug}"'
-    if query:
-        code += f', "{query}"'
-    else:
-        code += ', None'
-    code += f', "{status}", "{sort}", {limit})\n{save_as}'
-    
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
-
-
-@app.tool()
-async def get_sentry_event(organization_slug: str, issue_id: str, event_id: str, 
-                          *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    Retrieve and analyze a specific Sentry event from an issue.
-    
-    Args:
-        organization_slug (str): The slug of the organization
-        issue_id (str): The issue ID
-        event_id (str): The specific event ID to retrieve
-        save_as (str): Variable name to store the event data
+        Args:
+            organization_slug (str): The slug of the organization
+            project_slug (str): The slug of the project
+            query (Optional[str]): Search query to filter issues
+            status (str): Issue status filter ('resolved', 'unresolved', 'ignored')
+            sort (str): Sort order ('date', 'new', 'priority', 'freq', 'user')
+            limit (int): Maximum number of issues to return
+            save_as (str): Variable name to store the issues data
+            
+        Returns:
+            pd.DataFrame: Issues data as a DataFrame
+        """
+        code = f'{save_as} = list_project_issues_impl("{organization_slug}", "{project_slug}"'
+        if query:
+            code += f', "{query}"'
+        else:
+            code += ', None'
+        code += f', "{status}", "{sort}", {limit})\n{save_as}'
         
-    Returns:
-        pd.DataFrame: Event data as a DataFrame
-    """
-    code = f'{save_as} = get_sentry_event_impl("{organization_slug}", "{issue_id}", "{event_id}")\n{save_as}'
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
 
-
-@app.tool()
-async def list_issue_events(organization_slug: str, issue_id: str, limit: int = 50, 
-                           *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    List events for a specific Sentry issue.
-    
-    Args:
-        organization_slug (str): The slug of the organization
-        issue_id (str): The ID of the issue to list events from
-        limit (int): Maximum number of events to return
-        save_as (str): Variable name to store the events data
+    @app.tool()
+    async def get_sentry_event(organization_slug: str, issue_id: str, event_id: str, 
+                              *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        Retrieve and analyze a specific Sentry event from an issue.
         
-    Returns:
-        pd.DataFrame: Events data as a DataFrame
-    """
-    code = f'{save_as} = list_issue_events_impl("{organization_slug}", "{issue_id}", {limit})\n{save_as}'
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
+        Args:
+            organization_slug (str): The slug of the organization
+            issue_id (str): The issue ID
+            event_id (str): The specific event ID to retrieve
+            save_as (str): Variable name to store the event data
+            
+        Returns:
+            pd.DataFrame: Event data as a DataFrame
+        """
+        code = f'{save_as} = get_sentry_event_impl("{organization_slug}", "{issue_id}", "{event_id}")\n{save_as}'
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
 
-
-@app.tool()
-async def resolve_short_id(organization_slug: str, short_id: str, *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    Retrieve details about an issue using its short ID.
-    
-    Args:
-        organization_slug (str): The slug of the organization
-        short_id (str): The short ID of the issue (e.g., PROJECT-123)
-        save_as (str): Variable name to store the issue data
+    @app.tool()
+    async def list_issue_events(organization_slug: str, issue_id: str, limit: int = 50, 
+                               *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        List events for a specific Sentry issue.
         
-    Returns:
-        pd.DataFrame: Issue data as a DataFrame
-    """
-    code = f'{save_as} = resolve_short_id_impl("{organization_slug}", "{short_id}")\n{save_as}'
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
+        Args:
+            organization_slug (str): The slug of the organization
+            issue_id (str): The ID of the issue to list events from
+            limit (int): Maximum number of events to return
+            save_as (str): Variable name to store the events data
+            
+        Returns:
+            pd.DataFrame: Events data as a DataFrame
+        """
+        code = f'{save_as} = list_issue_events_impl("{organization_slug}", "{issue_id}", {limit})\n{save_as}'
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
 
-
-@app.tool()
-async def create_project(organization_slug: str, team_slug: str, name: str,
-                        platform: Optional[str] = None, *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    Create a new project in Sentry.
-    
-    Args:
-        organization_slug (str): The slug of the organization
-        team_slug (str): The slug of the team to assign the project to
-        name (str): The name of the new project
-        platform (Optional[str]): The platform for the new project
-        save_as (str): Variable name to store the created project data
+    @app.tool()
+    async def resolve_short_id(organization_slug: str, short_id: str, *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        Retrieve details about an issue using its short ID.
         
-    Returns:
-        pd.DataFrame: Created project data as a DataFrame
-    """
-    code = f'{save_as} = create_project_impl("{organization_slug}", "{team_slug}", "{name}"'
-    if platform:
-        code += f', "{platform}"'
-    code += f')\n{save_as}'
-    
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
+        Args:
+            organization_slug (str): The slug of the organization
+            short_id (str): The short ID of the issue (e.g., PROJECT-123)
+            save_as (str): Variable name to store the issue data
+            
+        Returns:
+            pd.DataFrame: Issue data as a DataFrame
+        """
+        code = f'{save_as} = resolve_short_id_impl("{organization_slug}", "{short_id}")\n{save_as}'
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
 
-
-@app.tool()
-async def list_organization_replays(organization_slug: str, project_ids: Optional[str] = None,
-                                   environment: Optional[str] = None, limit: int = 50,
-                                   *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    List replays from a specific Sentry organization.
-    
-    Args:
-        organization_slug (str): The slug of the organization
-        project_ids (Optional[str]): Comma-separated list of project IDs to filter by
-        environment (Optional[str]): Environment to filter by
-        limit (int): Maximum number of replays to return
-        save_as (str): Variable name to store the replays data
+    @app.tool()
+    async def create_project(organization_slug: str, team_slug: str, name: str,
+                            platform: Optional[str] = None, *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        Create a new project in Sentry.
         
-    Returns:
-        pd.DataFrame: Replays data as a DataFrame
-    """
-    project_ids_list = None
-    if project_ids:
-        project_ids_list = [pid.strip() for pid in project_ids.split(',')]
-    
-    code = f'{save_as} = list_organization_replays_impl("{organization_slug}"'
-    if project_ids_list:
-        code += f', {project_ids_list}'
-    else:
-        code += ', None'
-    if environment:
-        code += f', "{environment}"'
-    else:
-        code += ', None'
-    code += f', {limit})\n{save_as}'
-    
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records') 
+        Args:
+            organization_slug (str): The slug of the organization
+            team_slug (str): The slug of the team to assign the project to
+            name (str): The name of the new project
+            platform (Optional[str]): The platform for the new project
+            save_as (str): Variable name to store the created project data
+            
+        Returns:
+            pd.DataFrame: Created project data as a DataFrame
+        """
+        code = f'{save_as} = create_project_impl("{organization_slug}", "{team_slug}", "{name}"'
+        if platform:
+            code += f', "{platform}"'
+        code += f')\n{save_as}'
+        
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
+
+    @app.tool()
+    async def list_organization_replays(organization_slug: str, project_ids: Optional[str] = None,
+                                       environment: Optional[str] = None, limit: int = 50,
+                                       *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        List replays from a specific Sentry organization.
+        
+        Args:
+            organization_slug (str): The slug of the organization
+            project_ids (Optional[str]): Comma-separated list of project IDs to filter by
+            environment (Optional[str]): Environment to filter by
+            limit (int): Maximum number of replays to return
+            save_as (str): Variable name to store the replays data
+            
+        Returns:
+            pd.DataFrame: Replays data as a DataFrame
+        """
+        project_ids_list = None
+        if project_ids:
+            project_ids_list = [pid.strip() for pid in project_ids.split(',')]
+        
+        code = f'{save_as} = list_organization_replays_impl("{organization_slug}"'
+        if project_ids_list:
+            code += f', {project_ids_list}'
+        else:
+            code += ', None'
+        if environment:
+            code += f', "{environment}"'
+        else:
+            code += ', None'
+        code += f', {limit})\n{save_as}'
+        
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
+
+else:
+    logger.info("Sentry credentials not detected - Sentry tools will not be registered") 

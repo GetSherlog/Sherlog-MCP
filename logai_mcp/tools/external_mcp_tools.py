@@ -22,7 +22,15 @@ from logai_mcp.dataframe_utils import (
 )
 
 
-# Store registered external tools info for documentation
+def _external_mcps_available() -> bool:
+    """Check if external MCPs are configured."""
+    try:
+        settings = get_settings()
+        return bool(settings.external_mcps_json or settings.external_mcps)
+    except Exception:
+        return False
+
+
 EXTERNAL_TOOLS_REGISTRY: Dict[str, Dict[str, types.Tool]] = {}
 
 
@@ -347,44 +355,51 @@ _SHELL.push({
 })
 
 
-@app.tool()
-async def list_external_tools(server: Optional[str] = None) -> Dict[str, Any]:
-    """List all registered external MCP tools.
-    
-    Args:
-        server: Optional specific server name to filter by
+# Conditional tool registration based on external MCPs availability
+if _external_mcps_available():
+    logger.info("External MCPs configuration detected - registering external MCP tools")
+
+    @app.tool()
+    async def list_external_tools(server: Optional[str] = None) -> Dict[str, Any]:
+        """List all registered external MCP tools.
         
-    Returns:
-        Dictionary with tool information organized by server
-    """
-    result = {}
-    
-    for mcp_name, tools in EXTERNAL_TOOLS_REGISTRY.items():
-        if server and server != mcp_name:
-            continue
+        Args:
+            server: Optional specific server name to filter by
             
-        server_info = {
-            "tools": []
-        }
+        Returns:
+            Dictionary with tool information organized by server
+        """
+        result = {}
         
-        for tool_name, tool_info in tools.items():
-            tool_data = {
-                "name": tool_name,
-                "full_name": f"{mcp_name}_{tool_name}",
-                "description": tool_info.description
+        for mcp_name, tools in EXTERNAL_TOOLS_REGISTRY.items():
+            if server and server != mcp_name:
+                continue
+                
+            server_info = {
+                "tools": []
             }
             
-            # Add parameter info if available
-            if hasattr(tool_info, 'inputSchema') and tool_info.inputSchema:
-                schema = tool_info.inputSchema
-                if isinstance(schema, dict) and 'properties' in schema:
-                    tool_data["parameters"] = {
-                        "properties": schema['properties'],
-                        "required": schema.get('required', [])
-                    }
+            for tool_name, tool_info in tools.items():
+                tool_data = {
+                    "name": tool_name,
+                    "full_name": f"{mcp_name}_{tool_name}",
+                    "description": tool_info.description
+                }
+                
+                # Add parameter info if available
+                if hasattr(tool_info, 'inputSchema') and tool_info.inputSchema:
+                    schema = tool_info.inputSchema
+                    if isinstance(schema, dict) and 'properties' in schema:
+                        tool_data["parameters"] = {
+                            "properties": schema['properties'],
+                            "required": schema.get('required', [])
+                        }
+                
+                server_info["tools"].append(tool_data)
             
-            server_info["tools"].append(tool_data)
+            result[mcp_name] = server_info
         
-        result[mcp_name] = server_info
-    
-    return result
+        return result
+
+else:
+    logger.info("External MCPs configuration not detected - external MCP tools will not be registered")

@@ -17,6 +17,15 @@ from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 from logai_mcp.config import get_settings
 
 
+def _mixpanel_credentials_available() -> bool:
+    """Check if Mixpanel credentials are available."""
+    try:
+        settings = get_settings()
+        return bool(settings.mixpanel_api_secret)
+    except Exception:
+        return False
+
+
 def _get_mixpanel_session():
     """Create a requests session with Mixpanel authentication headers."""
     settings = get_settings()
@@ -473,232 +482,233 @@ _SHELL.push({
 })
 
 
-# MCP Tool implementations
+# Conditional tool registration based on Mixpanel credentials
+if _mixpanel_credentials_available():
+    logger.info("Mixpanel credentials detected - registering Mixpanel tools")
 
-@app.tool()
-async def export_events(from_date: str, to_date: str, event: Optional[str] = None,
-                       where: Optional[str] = None, bucket: Optional[str] = None, 
-                       *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    Export raw event data from Mixpanel.
-    
-    Args:
-        from_date (str): Start date in YYYY-MM-DD format
-        to_date (str): End date in YYYY-MM-DD format
-        event (Optional[str]): Specific event name to filter by
-        where (Optional[str]): Expression to filter events
-        bucket (Optional[str]): Data bucket/region (for EU residency)
-        save_as (str): Variable name to store the event data
+    # MCP Tool implementations
+
+    @app.tool()
+    async def export_events(from_date: str, to_date: str, event: Optional[str] = None,
+                           where: Optional[str] = None, bucket: Optional[str] = None, 
+                           *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        Export raw event data from Mixpanel.
         
-    Returns:
-        pd.DataFrame: Event data as a DataFrame
-    """
-    code = f'{save_as} = export_events_impl("{from_date}", "{to_date}"'
-    if event:
-        code += f', "{event}"'
-    else:
-        code += ', None'
-    if where:
-        code += f', "{where}"'
-    else:
-        code += ', None'
-    if bucket:
-        code += f', "{bucket}"'
-    code += f')\n{save_as}'
-    
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
-
-
-@app.tool()
-async def query_insights(event: str, unit: str = "day", interval: int = 1,
-                        type: str = "general", from_date: Optional[str] = None,
-                        to_date: Optional[str] = None, *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    Query Mixpanel Insights for event analytics.
-    
-    Args:
-        event (str): Event name to query
-        unit (str): Time unit for grouping (minute, hour, day, week, month)
-        interval (int): Number of units per data point
-        type (str): Query type (general, unique, average)
-        from_date (Optional[str]): Start date in YYYY-MM-DD format
-        to_date (Optional[str]): End date in YYYY-MM-DD format
-        save_as (str): Variable name to store the insights data
+        Args:
+            from_date (str): Start date in YYYY-MM-DD format
+            to_date (str): End date in YYYY-MM-DD format
+            event (Optional[str]): Specific event name to filter by
+            where (Optional[str]): Expression to filter events
+            bucket (Optional[str]): Data bucket/region (for EU residency)
+            save_as (str): Variable name to store the event data
+            
+        Returns:
+            pd.DataFrame: Event data as a DataFrame
+        """
+        code = f'{save_as} = export_events_impl("{from_date}", "{to_date}"'
+        if event:
+            code += f', "{event}"'
+        else:
+            code += ', None'
+        if where:
+            code += f', "{where}"'
+        else:
+            code += ', None'
+        if bucket:
+            code += f', "{bucket}"'
+        code += f')\n{save_as}'
         
-    Returns:
-        pd.DataFrame: Insights data as a DataFrame
-    """
-    code = f'{save_as} = query_insights_impl("{event}", "{unit}", {interval}, "{type}"'
-    if from_date:
-        code += f', "{from_date}"'
-        if to_date:
-            code += f', "{to_date}"'
-    code += f')\n{save_as}'
-    
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
 
-
-@app.tool()
-async def query_funnels(events: str, unit: str = "day", interval: int = 1,
-                       from_date: Optional[str] = None, to_date: Optional[str] = None,
-                       on: Optional[str] = None, *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    Query Mixpanel Funnels for conversion analytics.
-    
-    Args:
-        events (str): Comma-separated list of event names in funnel order
-        unit (str): Time unit for the funnel window
-        interval (int): Number of units for the funnel window
-        from_date (Optional[str]): Start date in YYYY-MM-DD format
-        to_date (Optional[str]): End date in YYYY-MM-DD format
-        on (Optional[str]): Property to segment funnel by
-        save_as (str): Variable name to store the funnel data
+    @app.tool()
+    async def query_insights(event: str, unit: str = "day", interval: int = 1,
+                            type: str = "general", from_date: Optional[str] = None,
+                            to_date: Optional[str] = None, *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        Query Mixpanel Insights for event analytics.
         
-    Returns:
-        pd.DataFrame: Funnel data as a DataFrame
-    """
-    events_list = [event.strip() for event in events.split(',')]
-    
-    code = f'{save_as} = query_funnels_impl({events_list}, "{unit}", {interval}'
-    if from_date:
-        code += f', "{from_date}"'
-        if to_date:
-            code += f', "{to_date}"'
-            if on:
-                code += f', "{on}"'
-    code += f')\n{save_as}'
-    
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
-
-
-@app.tool()
-async def query_retention(retention_type: str = "birth", born_event: Optional[str] = None,
-                         event: Optional[str] = None, born_where: Optional[str] = None,
-                         where: Optional[str] = None, from_date: Optional[str] = None,
-                         to_date: Optional[str] = None, unit: str = "day",
-                         *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    Query Mixpanel Retention for user retention analytics.
-    
-    Args:
-        retention_type (str): Type of retention analysis (birth, compounded)
-        born_event (Optional[str]): Event that defines the birth cohort
-        event (Optional[str]): Event to measure retention on
-        born_where (Optional[str]): Filter for the birth event
-        where (Optional[str]): Filter for the retention event
-        from_date (Optional[str]): Start date in YYYY-MM-DD format
-        to_date (Optional[str]): End date in YYYY-MM-DD format
-        unit (str): Time unit for retention periods
-        save_as (str): Variable name to store the retention data
+        Args:
+            event (str): Event name to query
+            unit (str): Time unit for grouping (minute, hour, day, week, month)
+            interval (int): Number of units per data point
+            type (str): Query type (general, unique, average)
+            from_date (Optional[str]): Start date in YYYY-MM-DD format
+            to_date (Optional[str]): End date in YYYY-MM-DD format
+            save_as (str): Variable name to store the insights data
+            
+        Returns:
+            pd.DataFrame: Insights data as a DataFrame
+        """
+        code = f'{save_as} = query_insights_impl("{event}", "{unit}", {interval}, "{type}"'
+        if from_date:
+            code += f', "{from_date}"'
+            if to_date:
+                code += f', "{to_date}"'
+        code += f')\n{save_as}'
         
-    Returns:
-        pd.DataFrame: Retention data as a DataFrame
-    """
-    code = f'{save_as} = query_retention_impl("{retention_type}"'
-    if born_event:
-        code += f', "{born_event}"'
-    else:
-        code += ', None'
-    if event:
-        code += f', "{event}"'
-    else:
-        code += ', None'
-    if born_where:
-        code += f', "{born_where}"'
-    else:
-        code += ', None'
-    if where:
-        code += f', "{where}"'
-    else:
-        code += ', None'
-    if from_date:
-        code += f', "{from_date}"'
-        if to_date:
-            code += f', "{to_date}"'
-    else:
-        code += ', None, None'
-    code += f', "{unit}")\n{save_as}'
-    
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
 
-
-@app.tool()
-async def query_people(where: Optional[str] = None, selector: Optional[str] = None,
-                      session_id: Optional[str] = None, *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    Query Mixpanel People profiles.
-    
-    Args:
-        where (Optional[str]): Expression to filter people profiles
-        selector (Optional[str]): Specific properties to return
-        session_id (Optional[str]): Session ID for paginated results
-        save_as (str): Variable name to store the people data
+    @app.tool()
+    async def query_funnels(events: str, unit: str = "day", interval: int = 1,
+                           from_date: Optional[str] = None, to_date: Optional[str] = None,
+                           on: Optional[str] = None, *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        Query Mixpanel Funnels for conversion analytics.
         
-    Returns:
-        pd.DataFrame: People profiles data as a DataFrame
-    """
-    code = f'{save_as} = query_people_impl('
-    if where:
-        code += f'"{where}"'
-    else:
-        code += 'None'
-    if selector:
-        code += f', "{selector}"'
-    else:
-        code += ', None'
-    if session_id:
-        code += f', "{session_id}"'
-    code += f')\n{save_as}'
-    
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
-
-
-@app.tool()
-async def list_event_names(type: str = "general", limit: int = 255, 
-                          *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    List all event names in the project.
-    
-    Args:
-        type (str): Type of events to list (general, unique, average)
-        limit (int): Maximum number of events to return
-        save_as (str): Variable name to store the event names
+        Args:
+            events (str): Comma-separated list of event names in funnel order
+            unit (str): Time unit for the funnel window
+            interval (int): Number of units for the funnel window
+            from_date (Optional[str]): Start date in YYYY-MM-DD format
+            to_date (Optional[str]): End date in YYYY-MM-DD format
+            on (Optional[str]): Property to segment funnel by
+            save_as (str): Variable name to store the funnel data
+            
+        Returns:
+            pd.DataFrame: Funnel data as a DataFrame
+        """
+        events_list = [event.strip() for event in events.split(',')]
         
-    Returns:
-        pd.DataFrame: Event names as a DataFrame
-    """
-    code = f'{save_as} = list_event_names_impl("{type}", {limit})\n{save_as}'
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records')
-
-
-@app.tool()
-async def list_event_properties(event: str, type: str = "general", limit: int = 255,
-                               *, save_as: str) -> Optional[pd.DataFrame]:
-    """
-    List properties for a specific event.
-    
-    Args:
-        event (str): Event name to get properties for
-        type (str): Type of properties to list (general, unique, average)
-        limit (int): Maximum number of properties to return
-        save_as (str): Variable name to store the event properties
+        code = f'{save_as} = query_funnels_impl({events_list}, "{unit}", {interval}'
+        if from_date:
+            code += f', "{from_date}"'
+            if to_date:
+                code += f', "{to_date}"'
+                if on:
+                    code += f', "{on}"'
+        code += f')\n{save_as}'
         
-    Returns:
-        pd.DataFrame: Event properties as a DataFrame
-    """
-    code = f'{save_as} = list_event_properties_impl("{event}", "{type}", {limit})\n{save_as}'
-    df = await run_code_in_shell(code)
-    if isinstance(df, pd.DataFrame):
-        return df.to_dict('records') 
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
+
+    @app.tool()
+    async def query_retention(retention_type: str = "birth", born_event: Optional[str] = None,
+                             event: Optional[str] = None, born_where: Optional[str] = None,
+                             where: Optional[str] = None, from_date: Optional[str] = None,
+                             to_date: Optional[str] = None, unit: str = "day",
+                             *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        Query Mixpanel Retention for user retention analytics.
+        
+        Args:
+            retention_type (str): Type of retention analysis (birth, compounded)
+            born_event (Optional[str]): Event that defines the birth cohort
+            event (Optional[str]): Event to measure retention on
+            born_where (Optional[str]): Filter for the birth event
+            where (Optional[str]): Filter for the retention event
+            from_date (Optional[str]): Start date in YYYY-MM-DD format
+            to_date (Optional[str]): End date in YYYY-MM-DD format
+            unit (str): Time unit for retention periods
+            save_as (str): Variable name to store the retention data
+            
+        Returns:
+            pd.DataFrame: Retention data as a DataFrame
+        """
+        code = f'{save_as} = query_retention_impl("{retention_type}"'
+        if born_event:
+            code += f', "{born_event}"'
+        else:
+            code += ', None'
+        if event:
+            code += f', "{event}"'
+        else:
+            code += ', None'
+        if born_where:
+            code += f', "{born_where}"'
+        else:
+            code += ', None'
+        if where:
+            code += f', "{where}"'
+        else:
+            code += ', None'
+        if from_date:
+            code += f', "{from_date}"'
+            if to_date:
+                code += f', "{to_date}"'
+        else:
+            code += ', None, None'
+        code += f', "{unit}")\n{save_as}'
+        
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
+
+    @app.tool()
+    async def query_people(where: Optional[str] = None, selector: Optional[str] = None,
+                          session_id: Optional[str] = None, *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        Query Mixpanel People profiles.
+        
+        Args:
+            where (Optional[str]): Expression to filter people profiles
+            selector (Optional[str]): Specific properties to return
+            session_id (Optional[str]): Session ID for paginated results
+            save_as (str): Variable name to store the people data
+            
+        Returns:
+            pd.DataFrame: People profiles data as a DataFrame
+        """
+        code = f'{save_as} = query_people_impl('
+        if where:
+            code += f'"{where}"'
+        else:
+            code += 'None'
+        if selector:
+            code += f', "{selector}"'
+        else:
+            code += ', None'
+        if session_id:
+            code += f', "{session_id}"'
+        code += f')\n{save_as}'
+        
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
+
+    @app.tool()
+    async def list_event_names(type: str = "general", limit: int = 255, 
+                              *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        List all event names in the project.
+        
+        Args:
+            type (str): Type of events to list (general, unique, average)
+            limit (int): Maximum number of events to return
+            save_as (str): Variable name to store the event names
+            
+        Returns:
+            pd.DataFrame: Event names as a DataFrame
+        """
+        code = f'{save_as} = list_event_names_impl("{type}", {limit})\n{save_as}'
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
+
+    @app.tool()
+    async def list_event_properties(event: str, type: str = "general", limit: int = 255,
+                                   *, save_as: str) -> Optional[pd.DataFrame]:
+        """
+        List properties for a specific event.
+        
+        Args:
+            event (str): Event name to get properties for
+            type (str): Type of properties to list (general, unique, average)
+            limit (int): Maximum number of properties to return
+            save_as (str): Variable name to store the event properties
+            
+        Returns:
+            pd.DataFrame: Event properties as a DataFrame
+        """
+        code = f'{save_as} = list_event_properties_impl("{event}", "{type}", {limit})\n{save_as}'
+        df = await run_code_in_shell(code)
+        if isinstance(df, pd.DataFrame):
+            return df.to_dict('records')
+
+else:
+    logger.info("Mixpanel credentials not detected - Mixpanel tools will not be registered") 

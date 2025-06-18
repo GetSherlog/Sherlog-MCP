@@ -26,6 +26,8 @@ RUN apt-get update \
         git \
         ca-certificates \
         curl \
+        nodejs \
+        npm \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local /usr/local
