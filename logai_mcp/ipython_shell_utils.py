@@ -1,7 +1,5 @@
 import contextlib
 import io
-import resource
-import platform
 from typing import Any
 
 from IPython.core.interactiveshell import InteractiveShell
@@ -33,13 +31,6 @@ def _df_column_matcher(text):
         return None
 
 _SHELL.Completer.custom_matchers.append(_df_column_matcher)
-
-if platform.system() != "Windows":
-    try:
-        resource.setrlimit(resource.RLIMIT_AS, (2_000_000_000, 2_000_000_000))
-        resource.setrlimit(resource.RLIMIT_CPU, (60, 60))
-    except ValueError:
-        pass
 
 
 async def run_code_in_shell(code: str):

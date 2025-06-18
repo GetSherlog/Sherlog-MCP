@@ -6,8 +6,9 @@ making them available as native LogAI tools with DataFrame integration.
 """
 
 import asyncio
+import inspect
 import os
-from typing import Any
+from typing import Any, Optional
 
 import pandas as pd
 import polars as pl
@@ -134,6 +135,36 @@ async def register_mcp_tools(mcp_name: str, mcp_config: dict[str, Any]):
         raise
 
 
+def _create_parameter_from_schema(param_name: str, param_info: dict) -> inspect.Parameter:
+    """Create an inspect.Parameter from JSON schema property info."""
+    param_type = param_info.get("type", "string")
+    default_value = param_info.get("default", inspect.Parameter.empty)
+    
+    # Map JSON schema types to Python types for better introspection
+    type_mapping = {
+        "string": str,
+        "integer": int,
+        "number": float,
+        "boolean": bool,
+        "array": list,
+        "object": dict,
+    }
+    
+    annotation = type_mapping.get(param_type, Any)
+    
+    # If no default provided but parameter is not required, make it optional
+    if default_value == inspect.Parameter.empty:
+        annotation = Optional[annotation]
+        default_value = None
+    
+    return inspect.Parameter(
+        param_name,
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        default=default_value,
+        annotation=annotation
+    )
+
+
 def register_external_tool(
     mcp_name: str, tool_info: types.Tool, mcp_config: dict[str, Any]
 ):
@@ -149,38 +180,87 @@ def register_external_tool(
 
     logger.debug(f"Registering tool: {full_tool_name}")
 
+    # Build docstring
     doc_lines = []
     if tool_info.description:
         doc_lines.append(tool_info.description)
     doc_lines.append(f"\n[External MCP: {mcp_name}]")
     doc_lines.append(f"[Original tool: {tool_info.name}]")
 
+    # Extract parameter information from schema
+    parameters = []
+    required_params = set()
+    
     if hasattr(tool_info, "inputSchema") and tool_info.inputSchema:
         doc_lines.append("\nParameters:")
         schema = tool_info.inputSchema
         if isinstance(schema, dict) and "properties" in schema:
+            required_params = set(schema.get("required", []))
+            
             for param_name, param_info in schema["properties"].items():
                 param_type = param_info.get("type", "any")
                 param_desc = param_info.get("description", "")
-                required = param_name in schema.get("required", [])
+                required = param_name in required_params
                 req_str = " (required)" if required else " (optional)"
                 doc_lines.append(
                     f"  {param_name}: {param_type}{req_str} - {param_desc}"
                 )
+                
+                # Create parameter for function signature
+                try:
+                    param = _create_parameter_from_schema(param_name, param_info)
+                    if required and param.default != inspect.Parameter.empty:
+                        # Required parameters should not have defaults
+                        param = param.replace(default=inspect.Parameter.empty)
+                    parameters.append(param)
+                except Exception as e:
+                    logger.warning(f"Failed to create parameter {param_name}: {e}")
 
+    # Always add save_as parameter
+    save_as_param = inspect.Parameter(
+        "save_as",
+        inspect.Parameter.KEYWORD_ONLY,
+        default=f"{full_tool_name}_result",
+        annotation=str
+    )
+    parameters.append(save_as_param)
+    
     doc_lines.append(
         "\n  save_as: str - Variable name to store results in IPython shell"
     )
 
+    # Create function signature
+    signature = inspect.Signature(parameters)
+
     def create_tool_function():
-        async def tool_impl(**kwargs) -> Any:
-            save_as = kwargs.pop("save_as", f"{full_tool_name}_result")
+        async def tool_impl(*args, **kwargs) -> Any:
+            # Bind arguments to signature to validate them
+            try:
+                bound_args = signature.bind(*args, **kwargs)
+                bound_args.apply_defaults()
+            except TypeError as e:
+                raise ValueError(f"Invalid arguments for {tool_info.name}: {e}")
+            
+            # Extract save_as and remove from params sent to external tool
+            call_params = dict(bound_args.arguments)
+            save_as = call_params.pop("save_as", f"{full_tool_name}_result")
+            
+            # Validate required parameters
+            missing_required = []
+            for param_name in required_params:
+                if param_name not in call_params or call_params[param_name] is None:
+                    missing_required.append(param_name)
+            
+            if missing_required:
+                raise ValueError(
+                    f"Missing required parameters for {tool_info.name}: {missing_required}"
+                )
 
             code = generate_tool_execution_code(
                 mcp_name=mcp_name,
                 mcp_config=mcp_config,
                 tool_name=tool_info.name,
-                params=kwargs,
+                params=call_params,
                 save_as=save_as,
             )
 
@@ -196,6 +276,7 @@ def register_external_tool(
 
         tool_impl.__name__ = full_tool_name
         tool_impl.__doc__ = "\n".join(doc_lines)
+        tool_impl.__signature__ = signature
 
         return tool_impl
 
@@ -270,10 +351,10 @@ async def _execute_external_tool():
                 try:
                     result = await asyncio.wait_for(
                         session.call_tool({repr(tool_name)}, arguments={repr(params)}),
-                        timeout=60.0
+                        timeout=15.0
                     )
                 except asyncio.TimeoutError:
-                    raise Exception(f"Timeout calling tool {tool_name} on {mcp_name}")
+                    raise Exception(f"Timeout calling tool {tool_name} on {mcp_name} (15s limit exceeded). The operation took too long, likely due to large file size or complex processing. Consider using alternative approaches like: 1) Reading specific file sections instead of entire file, 2) Using file streaming, 3) Filtering/limiting data before processing, or 4) Breaking large operations into smaller chunks.")
                 
                 # Extract the actual result
                 if hasattr(result, 'content'):
@@ -294,17 +375,39 @@ async def _execute_external_tool():
                 else:
                     return result
                 
+    except asyncio.TimeoutError as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        error_msg = f"Timeout error executing {mcp_name}.{tool_name}: Operation exceeded time limit"
+        logger.error(f"{{error_msg}}: {{e}}")
+        raise Exception(error_msg)
+    except (ConnectionError, OSError, IOError) as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        error_msg = f"Connection error executing {mcp_name}.{tool_name}: Failed to connect or communicate with external MCP"
+        logger.error(f"{{error_msg}}: {{e}}")
+        raise Exception(error_msg)
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
-        logger.error(f"Error executing {mcp_name}.{tool_name}: {{e}}")
-        raise
+        error_msg = f"Error executing {mcp_name}.{tool_name}: " + str(e)
+        logger.error(error_msg)
+        raise Exception(error_msg)
 
-# Execute the async function
+# Execute the async function with comprehensive error handling
 try:
     _result = await _execute_external_tool()
 except Exception as e:
-    _result = {{"error": str(e), "tool": "{tool_name}", "mcp": "{mcp_name}"}}
+    # Capture any exception and return as structured error
+    error_details = {{
+        "error": str(e),
+        "error_type": type(e).__name__,
+        "tool": "{tool_name}",
+        "mcp": "{mcp_name}",
+        "suggestion": "Try alternative approaches if this was a timeout or large file operation"
+    }}
+    _result = error_details
+    print(f"External MCP tool execution failed: {{str(e)}}")
 
 # Convert to DataFrame if possible
 {save_as} = convert_to_dataframe(_result)
@@ -336,8 +439,32 @@ def convert_to_dataframe(data: Any) -> pd.DataFrame | Any:
 
     """
     try:
-        df = smart_create_dataframe(data, prefer_polars=True)
-        return df
+        # Avoid blindly converting plain dicts (e.g. {"foo": "bar"}) into a
+        # single-row DataFrame – that tends to break JSON-serialisation and makes
+        # the response harder to consume programme-matically.  We only convert to
+        # a DataFrame when the structure *looks* tabular (list/sequence of
+        # mappings or sequences of equal length).
+
+        _should_convert = True
+
+        if isinstance(data, dict):
+            # Heuristics:
+            # 1. Every value is list-like OR
+            # 2. Value count > 1 and at least one value is list-like.
+            # Otherwise, keep as-is.
+            list_like_values = [
+                isinstance(v, (list, tuple)) for v in data.values()
+            ]
+
+            if not any(list_like_values):
+                _should_convert = False
+
+        if _should_convert:
+            df = smart_create_dataframe(data, prefer_polars=True)
+            return df
+        else:
+            return data
+
     except Exception as e:
         logger.warning(f"DataFrame conversion failed: {e}, returning original data")
         return data
