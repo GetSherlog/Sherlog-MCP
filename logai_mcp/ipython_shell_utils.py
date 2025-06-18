@@ -1,19 +1,50 @@
 import contextlib
 import io
+import resource
+import platform
 from typing import Any
 
 from IPython.core.interactiveshell import InteractiveShell
+from IPython.core.completer import IPCompleter
 
 from logai_mcp.session import app, logger
 
 _SHELL: InteractiveShell = InteractiveShell.instance()
 _SHELL.reset()
 
+_SHELL.run_line_magic("load_ext", "autoreload")
+_SHELL.run_line_magic("autoreload", "2")
+_SHELL.run_line_magic("xmode", "Verbose")
+_SHELL.run_line_magic("pdb", "on")
+
+_SHELL.Completer = IPCompleter(shell=_SHELL, use_jedi=False)
+
+def _df_column_matcher(text):
+    import re, pandas as pd
+    try:
+        m = re.match(r"(.+?)\['([^\]]*$)", text)
+        if not m:
+            return None
+        var, stub = m.groups()
+        if var in _SHELL.user_ns and isinstance(_SHELL.user_ns[var], pd.DataFrame):
+            cols = _SHELL.user_ns[var].columns.astype(str)
+            return [f"{var}['{c}']" for c in cols if c.startswith(stub)][:200]
+    except Exception:
+        return None
+
+_SHELL.Completer.custom_matchers.append(_df_column_matcher)
+
+if platform.system() != "Windows":
+    try:
+        resource.setrlimit(resource.RLIMIT_AS, (2_000_000_000, 2_000_000_000))
+        resource.setrlimit(resource.RLIMIT_CPU, (60, 60))
+    except ValueError:
+        pass
+
 
 async def run_code_in_shell(code: str):
     execution_result = await _SHELL.run_cell_async(code)
 
-    # Check for execution errors and raise them instead of silently ignoring
     if execution_result.error_before_exec:
         raise execution_result.error_before_exec
 
@@ -73,7 +104,6 @@ async def execute_python_code(code: str):
     run_code_in_shell (internal utility called by this tool)
 
     """
-    # Capture stdout and stderr so that users can see print output and error messages
     stdout_buffer = io.StringIO()
     stderr_buffer = io.StringIO()
 
@@ -98,6 +128,8 @@ async def execute_python_code(code: str):
             error_type = type(result.error_in_exec).__name__
             error_msg = str(result.error_in_exec)
             execution_details_dict["error_in_exec"] = f"{error_type}: {error_msg}"
+            if hasattr(result, 'traceback') and result.traceback:
+                execution_details_dict["traceback"] = result.traceback[:8192]
 
     if stdout_value:
         execution_details_dict["stdout"] = stdout_value.rstrip()
@@ -312,26 +344,18 @@ async def install_package(package_spec: str, upgrade: bool = False):
 
     """
     try:
-        # Build the pip install command arguments
         pip_args = []
 
         if upgrade:
             pip_args.append("--upgrade")
-
-        # Add the package specification
         pip_args.append(package_spec)
 
-        # Join arguments for the magic command
         pip_command_line = " ".join(pip_args)
 
-        # Use IPython's %pip magic command to install packages
-        # This ensures the package is installed in the same environment as the IPython shell
         magic_result = _SHELL.run_line_magic("pip", f"install {pip_command_line}")
 
-        # Extract requested package names for tracking
         packages_requested = []
         for pkg in package_spec.split():
-            # Extract base package name (strip version constraints)
             base_name = (
                 pkg.split("==")[0]
                 .split(">=")[0]
@@ -343,7 +367,6 @@ async def install_package(package_spec: str, upgrade: bool = False):
             if not base_name.startswith("git+"):
                 packages_requested.append(base_name)
             else:
-                # For git repos, try to extract package name from URL
                 if ".git" in base_name:
                     repo_name = base_name.split("/")[-1].replace(".git", "")
                     packages_requested.append(repo_name)
@@ -358,8 +381,6 @@ async def install_package(package_spec: str, upgrade: bool = False):
 
     except Exception as e:
         error_msg = str(e)
-
-        # Check if it's a common error type we can provide better feedback for
         if "No module named" in error_msg:
             error_msg += "\nNote: Package may need to be installed with a different name or from a different source."
         elif "Permission denied" in error_msg:
@@ -370,11 +391,6 @@ async def install_package(package_spec: str, upgrade: bool = False):
             "output": f"Installation failed: {error_msg}",
             "packages_requested": package_spec.split(),
         }
-
-
-# =============================================================================
-# CODE COMPLETION & CONTEXT TOOLS
-# =============================================================================
 
 
 @app.tool()
@@ -413,10 +429,14 @@ async def get_completions(text: str, cursor_pos: int | None = None) -> dict[str,
         if cursor_pos is None:
             cursor_pos = len(text)
 
-        # Use IPython's completion system
-        completed_text, matches = _SHELL.complete(text, cursor_pos)
+        completed_text, matches = _SHELL.complete(text, cursor_pos=cursor_pos)
 
-        # Find where the completion starts
+        if not isinstance(completed_text, str):
+            completed_text = str(completed_text) if completed_text is not None else ""
+        
+        if not isinstance(matches, list):
+            matches = []
+
         cursor_start = cursor_pos - len(completed_text)
         cursor_end = cursor_pos
 
@@ -425,7 +445,7 @@ async def get_completions(text: str, cursor_pos: int | None = None) -> dict[str,
             "matches": matches,
             "cursor_start": cursor_start,
             "cursor_end": cursor_end,
-            "total_matches": len(matches),
+            "total_matches": len(matches) if hasattr(matches, '__len__') else 0,
         }
     except Exception as e:
         logger.error(f"Error getting completions: {e}")
@@ -471,7 +491,6 @@ async def get_function_signature(func_name: str) -> dict[str, Any]:
 
     """
     try:
-        # Use IPython's object inspection with detail level 1 for docstring
         info = _SHELL.object_inspect(func_name, detail_level=1)
 
         if not info:
@@ -544,7 +563,6 @@ async def get_namespace_info() -> dict[str, Any]:
                     continue
                 user_vars.append(name)
 
-        # Get builtin names - use dir() on builtins module as fallback
         builtin_names = []
         try:
             import builtins
@@ -565,7 +583,6 @@ async def get_namespace_info() -> dict[str, Any]:
                 "set",
             ]
 
-        # Find imported modules
         imported_modules = []
         if _SHELL.user_ns:
             for name, obj in _SHELL.user_ns.items():
@@ -582,11 +599,6 @@ async def get_namespace_info() -> dict[str, Any]:
     except Exception as e:
         logger.error(f"Error getting namespace info: {e}")
         return {"error": str(e)}
-
-
-# =============================================================================
-# ENHANCED OBJECT INTROSPECTION TOOLS
-# =============================================================================
 
 
 @app.tool()
@@ -617,7 +629,6 @@ async def get_object_source(object_name: str) -> dict[str, Any]:
 
     """
     try:
-        # Use IPython's object inspection with detail level 2 for source code
         info = _SHELL.object_inspect(object_name, detail_level=2)
 
         if not info:
@@ -675,10 +686,8 @@ async def list_object_attributes(
 
         obj = _SHELL.user_ns[object_name]
 
-        # Get all attributes
         all_attrs = dir(obj)
 
-        # Filter based on pattern and private setting
         import fnmatch
 
         filtered_attrs = []
@@ -688,7 +697,6 @@ async def list_object_attributes(
             if fnmatch.fnmatch(attr.lower(), pattern.lower()):
                 filtered_attrs.append(attr)
 
-        # Categorize attributes
         methods = []
         properties = []
         other_attrs = []
@@ -763,11 +771,6 @@ async def get_docstring(object_name: str) -> dict[str, Any]:
         return {"error": str(e)}
 
 
-# =============================================================================
-# ERROR ANALYSIS & DEBUGGING TOOLS
-# =============================================================================
-
-
 @app.tool()
 async def get_last_exception_info() -> dict[str, Any]:
     """Get detailed info about last exception to help LLM debug and fix code.
@@ -791,13 +794,11 @@ async def get_last_exception_info() -> dict[str, Any]:
 
     """
     try:
-        # Get the last exception info
         exception_only = _SHELL.get_exception_only()
 
         if not exception_only or exception_only.strip() == "":
             return {"has_exception": False, "message": "No recent exception found"}
 
-        # Parse exception info
         lines = exception_only.strip().split("\n")
         if lines:
             last_line = lines[-1]
@@ -856,11 +857,9 @@ async def analyze_syntax_error(code: str) -> dict[str, Any]:
 
     """
     try:
-        # Try to compile the code
         compile(code, "<string>", "exec")
         return {"valid": True, "message": "Code has valid syntax"}
     except SyntaxError as e:
-        # Extract detailed syntax error information
         error_info = {
             "valid": False,
             "error": str(e),
@@ -870,8 +869,6 @@ async def analyze_syntax_error(code: str) -> dict[str, Any]:
             "text": e.text.strip() if e.text else "",
             "filename": e.filename or "<string>",
         }
-
-        # Add some common suggestions based on error type
         suggestions = []
         error_msg = str(e).lower()
 
@@ -894,11 +891,6 @@ async def analyze_syntax_error(code: str) -> dict[str, Any]:
             "error_type": type(e).__name__,
             "suggestions": ["Unexpected error during syntax analysis"],
         }
-
-
-# =============================================================================
-# CODE QUALITY & FORMATTING TOOLS
-# =============================================================================
 
 
 @app.tool()
@@ -936,7 +928,6 @@ async def check_code_completeness(code: str) -> dict[str, Any]:
 
         needs_more = status == "incomplete"
 
-        # Provide explanations for different statuses
         reasons = {
             "complete": "Code block is syntactically complete and ready for execution",
             "incomplete": "Code block needs additional lines to be complete",
@@ -959,11 +950,6 @@ async def check_code_completeness(code: str) -> dict[str, Any]:
             "reason": f"Error analyzing code: {str(e)}",
             "error": str(e),
         }
-
-
-# =============================================================================
-# ENHANCED MAGIC DISCOVERY TOOLS
-# =============================================================================
 
 
 @app.tool()
@@ -1034,7 +1020,6 @@ async def get_magic_help(magic_name: str, magic_type: str = "line") -> dict[str,
 
     """
     try:
-        # Find the magic function
         if magic_type == "line":
             magic_func = _SHELL.find_line_magic(magic_name)
         elif magic_type == "cell":
@@ -1049,7 +1034,6 @@ async def get_magic_help(magic_name: str, magic_type: str = "line") -> dict[str,
                 "magic_type": magic_type,
             }
 
-        # Get the docstring
         help_text = (
             magic_func.__doc__ if magic_func.__doc__ else "No documentation available"
         )
@@ -1070,3 +1054,42 @@ async def get_magic_help(magic_name: str, magic_type: str = "line") -> dict[str,
             "magic_type": magic_type,
             "magic_name": magic_name,
         }
+
+
+@app.tool()
+async def describe_object(name: str, sample: int = 5) -> dict:
+    """Get structured summary of objects to avoid payload bloat."""
+    ns = _SHELL.user_ns
+    if name not in ns:
+        return {"error": f"{name} not in namespace"}
+
+    obj = ns[name]
+    import pandas as pd, polars as pl, numpy as np, inspect
+
+    if isinstance(obj, pd.DataFrame):
+        return {
+            "type": "DataFrame",
+            "rows": len(obj),
+            "columns": list(map(str, obj.columns))[:50],
+            "head": obj.head(sample).to_dict("records"),
+        }
+    
+    if isinstance(obj, pl.DataFrame):
+        return {
+            "type": "DataFrame", 
+            "rows": len(obj),
+            "columns": list(map(str, obj.columns))[:50],
+            "head": obj.head(sample).to_dicts(),
+        }
+
+    if isinstance(obj, (np.ndarray, list, tuple, set)):
+        return {"type": "array", "len": len(obj), "sample": list(obj)[:sample]}
+
+    if inspect.isfunction(obj) or inspect.isclass(obj):
+        return {
+            "type": "callable",
+            "signature": str(inspect.signature(obj)),
+            "doc": (obj.__doc__ or "").split("\n")[0][:500],
+        }
+
+    return {"type": type(obj).__name__, "repr": repr(obj)[:500]}

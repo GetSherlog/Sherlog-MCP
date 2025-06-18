@@ -45,14 +45,17 @@ try:
 except ImportError:
     pass
 
-from .filesystem_tools import (
-    directory_tree,
-    get_file_info,
-    list_allowed_directories,
-    list_directory,
-    read_file,
-    search_files,
-)
+try:
+    from .filesystem_tools import (
+        directory_tree,
+        get_file_info,
+        list_allowed_directories,
+        list_directory,
+        read_file,
+        search_files,
+    )
+except ImportError:
+    pass
 
 try:
     from .grafana_tools import (

@@ -12,6 +12,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import polars as pl
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -72,64 +73,52 @@ def create_dataframe_polars(data: Any) -> pl.DataFrame:
     if data is None:
         return pl.DataFrame()
 
-    # Already a polars DataFrame
     if isinstance(data, pl.DataFrame):
         return data
-
-    # Convert from pandas
     if isinstance(data, pd.DataFrame):
         return pl.from_pandas(data)
 
-    # List of dictionaries (most common case)
     if isinstance(data, list) and len(data) > 0:
         if all(isinstance(item, dict) for item in data):
             return pl.DataFrame(data)
-        # List of lists with potential header
         elif all(isinstance(item, list) for item in data):
             if len(data) > 1:
                 try:
-                    # Try with first row as header
                     return pl.DataFrame(data[1:], schema=data[0])
                 except:
-                    # Fall back to no header
                     return pl.DataFrame(data)
             else:
                 return pl.DataFrame(data)
 
-    # Dictionary with list values (column-oriented data)
     if isinstance(data, dict):
-        # Check if all values are lists of same length
         if all(isinstance(v, list) for v in data.values()):
             lengths = [len(v) for v in data.values()]
-            if len(set(lengths)) == 1:  # All same length
+            if len(set(lengths)) == 1:
                 return pl.DataFrame(data)
 
-        # Single row dictionary
         if all(not isinstance(v, (list, dict)) for v in data.values()):
             return pl.DataFrame([data])
 
-    # NumPy array
     if isinstance(data, np.ndarray):
         return pl.DataFrame(data)
 
-    # String that might be CSV or JSON
     if isinstance(data, str):
-        # Try JSON first
         try:
-            import json
-
             json_data = json.loads(data)
-            return create_dataframe_polars(json_data)  # Recursive call
+            return create_dataframe_polars(json_data)
         except:
             pass
 
-        # Try CSV
         try:
             return pl.read_csv(StringIO(data))
         except:
             pass
 
-    # If all else fails, create empty DataFrame
+    try:
+        return pl.DataFrame({"result": [data]})
+    except:
+        pass
+
     logger.warning(
         f"Could not convert {type(data)} to polars DataFrame, returning empty DataFrame"
     )
@@ -152,69 +141,59 @@ def create_dataframe_pandas(data: Any) -> pl.DataFrame | pd.DataFrame | Any:
     if data is None:
         return pd.DataFrame()
 
-    # Already a pandas DataFrame
     if isinstance(data, pd.DataFrame):
         return data
 
-    # Convert from polars
     if isinstance(data, pl.DataFrame):
         return data.to_pandas()
 
-    # List of dictionaries (most common case)
     if isinstance(data, list) and len(data) > 0:
         if all(isinstance(item, dict) for item in data):
             return pd.DataFrame(data)
-        # List of lists with potential header
         elif all(isinstance(item, list) for item in data):
             if len(data) > 1:
                 try:
-                    # Try with first row as header
                     df = pd.DataFrame(data[1:], columns=data[0])
                     return df
                 except:
-                    # Fall back to no header
                     return pd.DataFrame(data)
             else:
                 return pd.DataFrame(data)
 
-    # Dictionary with list values (column-oriented data)
     if isinstance(data, dict):
-        # Check if all values are lists of same length
         if all(isinstance(v, list) for v in data.values()):
             lengths = [len(v) for v in data.values()]
-            if len(set(lengths)) == 1:  # All same length
+            if len(set(lengths)) == 1: 
                 return pd.DataFrame(data)
 
-        # Single row dictionary
         if all(not isinstance(v, (list, dict)) for v in data.values()):
             return pd.DataFrame([data])
 
-        # Nested structure - try to normalize
         try:
             return pd.json_normalize(data)
         except:
             pass
 
-    # NumPy array
     if isinstance(data, np.ndarray):
         return pd.DataFrame(data)
 
-    # String that might be CSV or JSON
     if isinstance(data, str):
-        # Try JSON first
         try:
-            import json
-
             json_data = json.loads(data)
             return create_dataframe_pandas(json_data)
         except:
             pass
 
-        # Try CSV
         try:
             return pd.read_csv(StringIO(data))
         except:
             pass
+
+    try:
+        return pd.DataFrame({"result": [data]})
+    except:
+        pass
+
     return data
 
 
@@ -313,7 +292,6 @@ def to_json_serializable(
         return df
 
 
-# Export commonly used functions
 __all__ = [
     "DataFrame",
     "LazyFrame",
