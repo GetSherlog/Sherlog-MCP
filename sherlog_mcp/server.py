@@ -2,10 +2,10 @@ import asyncio
 import logging
 import os
 
-from logai_mcp.session import (
+from sherlog_mcp.session import (
     app,  # noqa: F401 – side-effect: create singleton & basic tools
 )
-from logai_mcp.tools import (
+from sherlog_mcp.tools import (
     external_mcp_tools,
 )  # noqa: F401
 
@@ -14,11 +14,11 @@ logger = logging.getLogger(__name__)
 
 def main():
     """Main entry point for the MCP server"""
-    logger.info("Starting LogAI MCP Server...")
+    logger.info("Starting Sherlog MCP Server...")
 
     transport = os.getenv("MCP_TRANSPORT", "streamable-http")
 
-    from logai_mcp.session import restore_session
+    from sherlog_mcp.session import restore_session
 
     restore_session()
 
@@ -29,7 +29,7 @@ def main():
     except Exception as e:
         logger.error(f"Failed to register external MCPs: {e}")
 
-    logger.info(f"Starting LogAI MCP server with transport: {transport}")
+    logger.info(f"Starting Sherlog MCP server with transport: {transport}")
 
     if transport == "stdio":
         app.run(transport="stdio")

@@ -9,8 +9,8 @@ from logai.information_extraction.log_parser import LogParser, LogParserConfig
 from logai.preprocess.preprocessor import Preprocessor, PreprocessorConfig
 from logai.utils import constants
 
-from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
-from logai_mcp.session import (
+from sherlog_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
+from sherlog_mcp.session import (
     app,
     logger,
 )

@@ -20,8 +20,8 @@ import pandas as pd
 from logai.analysis.anomaly_detector import AnomalyDetectionConfig, AnomalyDetector
 from sklearn.model_selection import train_test_split
 
-from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
-from logai_mcp.session import (
+from sherlog_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
+from sherlog_mcp.session import (
     app,
     logger,
 )

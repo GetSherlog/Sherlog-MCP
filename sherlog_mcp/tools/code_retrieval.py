@@ -4,9 +4,9 @@ import os
 
 import pandas as pd
 
-from logai_mcp.config import get_settings
-from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
-from logai_mcp.session import app, logger
+from sherlog_mcp.config import get_settings
+from sherlog_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
+from sherlog_mcp.session import app, logger
 
 from .file_loading import load_files
 from .treesitter_parser import LanguageEnum, Treesitter

@@ -1,4 +1,4 @@
-"""AWS CloudWatch Tools for LogAI MCP Server
+"""AWS CloudWatch Tools for Sherlog MCP Server
 
 This module provides tools for interacting with Amazon CloudWatch for logs, metrics, and alarms.
 All operations are logged and can be accessed through audit endpoints.
@@ -12,8 +12,8 @@ from typing import Any
 import boto3
 from botocore.exceptions import NoCredentialsError
 
-from logai_mcp.config import get_settings
-from logai_mcp.session import app
+from sherlog_mcp.config import get_settings
+from sherlog_mcp.session import app
 
 logger = logging.getLogger(__name__)
 

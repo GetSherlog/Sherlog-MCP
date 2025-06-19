@@ -1,4 +1,4 @@
-"""Kubernetes Tools for LogAI MCP Server
+"""Kubernetes Tools for Sherlog MCP Server
 
 This module provides tools for read-only interactions with Kubernetes clusters.
 All operations are logged and can be accessed through audit endpoints.
@@ -11,10 +11,10 @@ import pandas as pd
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
-from logai_mcp.config import get_settings
-from logai_mcp.dataframe_utils import smart_create_dataframe, to_pandas
-from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
-from logai_mcp.session import app, logger
+from sherlog_mcp.config import get_settings
+from sherlog_mcp.dataframe_utils import smart_create_dataframe, to_pandas
+from sherlog_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
+from sherlog_mcp.session import app, logger
 
 
 def _kubernetes_available() -> bool:

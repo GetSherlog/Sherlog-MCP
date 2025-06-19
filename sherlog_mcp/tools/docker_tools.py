@@ -1,9 +1,9 @@
 import docker
 import pandas as pd
 
-from logai_mcp.dataframe_utils import smart_create_dataframe, to_pandas
-from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
-from logai_mcp.session import (
+from sherlog_mcp.dataframe_utils import smart_create_dataframe, to_pandas
+from sherlog_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
+from sherlog_mcp.session import (
     app,
     logger,
 )

@@ -1,4 +1,4 @@
-"""AWS S3 Tools for LogAI MCP Server
+"""AWS S3 Tools for Sherlog MCP Server
 
 This module provides tools for interacting with Amazon S3 buckets and objects.
 All operations are logged and can be accessed through audit endpoints.
@@ -13,8 +13,8 @@ import os
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 
-from logai_mcp.config import get_settings
-from logai_mcp.session import app
+from sherlog_mcp.config import get_settings
+from sherlog_mcp.session import app
 
 logger = logging.getLogger(__name__)
 

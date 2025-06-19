@@ -7,7 +7,7 @@ from mcp import ClientSession
 
 @pytest.mark.asyncio
 class TestGoogleSheetsIntegration:
-    """Integration tests for Google Sheets functionality via LogAI MCP"""
+    """Integration tests for Google Sheets functionality via Sherlog MCP"""
     
     async def _create_mcp_session(self):
         """Helper to create MCP session for each test"""
@@ -19,7 +19,7 @@ class TestGoogleSheetsIntegration:
                 return session
     
     async def test_google_sheets_tools_available(self):
-        """Test that Google Sheets tools are available through LogAI MCP"""
+        """Test that Google Sheets tools are available through Sherlog MCP"""
         base_url = os.getenv('MCP_SERVER_URL', 'http://localhost:8000')
         
         async with streamablehttp_client(f"{base_url}/mcp/") as (read_stream, write_stream, _):

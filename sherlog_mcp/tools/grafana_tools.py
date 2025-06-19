@@ -3,9 +3,9 @@ from urllib.parse import urljoin
 import pandas as pd
 import requests
 
-from logai_mcp.config import get_settings
-from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
-from logai_mcp.session import (
+from sherlog_mcp.config import get_settings
+from sherlog_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
+from sherlog_mcp.session import (
     app,
     logger,
 )

@@ -1,6 +1,6 @@
-"""LogAI MCP Tools Package
+"""Sherlog MCP Tools Package
 
-This package contains all the available tools for the LogAI MCP server.
+This package contains all the available tools for the Sherlog MCP server.
 Tools are automatically registered with the FastMCP app when imported.
 """
 

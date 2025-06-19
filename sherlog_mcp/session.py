@@ -23,7 +23,7 @@ import polars as pl
 import pydantic_core
 from mcp.server.fastmcp import FastMCP
 
-from logai_mcp.config import get_settings
+from sherlog_mcp.config import get_settings
 
 _original_to_json = pydantic_core.to_json
 
@@ -58,14 +58,14 @@ def _enhanced_to_json(value, *, fallback=None, **kwargs):
 
 pydantic_core.to_json = _enhanced_to_json
 
-app = FastMCP(name="LogAIMCP", stateless_http=True)
+app = FastMCP(name="SherlogMCP", stateless_http=True)
 
 
 @app.custom_route("/health", methods=["GET"])
 async def health_check(request):
     from starlette.responses import JSONResponse
 
-    return JSONResponse({"status": "ok", "service": "LogAI MCP"})
+    return JSONResponse({"status": "ok", "service": "Sherlog MCP"})
 
 
 for _resource in [
@@ -81,7 +81,7 @@ for _resource in [
 session_vars: dict[str, Any] = {}
 session_meta: dict[str, dict[str, Any]] = {}
 
-logger = logging.getLogger("LogAIMCP")
+logger = logging.getLogger("SherlogMCP")
 if not logger.handlers:
     import sys
     _handler = logging.StreamHandler(sys.stderr)
@@ -103,7 +103,7 @@ SESSION_FILE = SESSIONS_DIR / "session_state.pkl"
 def save_session():
     """Save current session state"""
     try:
-        from logai_mcp.ipython_shell_utils import _SHELL
+        from sherlog_mcp.ipython_shell_utils import _SHELL
 
         state = {
             "session_vars": session_vars,
@@ -131,7 +131,7 @@ def restore_session():
         return
 
     try:
-        from logai_mcp.ipython_shell_utils import _SHELL
+        from sherlog_mcp.ipython_shell_utils import _SHELL
 
         with open(SESSION_FILE, "rb") as f:
             state = dill.load(f)

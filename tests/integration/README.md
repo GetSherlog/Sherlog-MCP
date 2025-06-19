@@ -1,6 +1,6 @@
 # Integration Tests
 
-This directory contains integration tests for the LogAI MCP server.
+This directory contains integration tests for the Sherlog MCP server.
 
 ## Test Files
 

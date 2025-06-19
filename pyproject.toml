@@ -1,11 +1,11 @@
 [project]
-name = "logai-mcp-server"
+name = "sherlog-mcp-server"
 version = "0.1.0"
-description = "Expose LogAI functionality as an MCP server."
+description = "A persistent IPython workspace for data analysis and log processing via MCP."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-    { name = "Sherlog AI", email = "dev@sherlog.ai" }
+    { name = "Sherlog AI", email = "navneet.nmk@gmail.com" }
 ]
 # Core runtime dependencies for the server
 # These will be resolved into exact pins in uv.lock
@@ -53,7 +53,7 @@ dependencies = [
 ]
 
 [project.scripts]
-logai-mcp-server = "logai_mcp_server:main"
+sherlog-mcp-server = "sherlog_mcp_server:main"
 lint = "ruff:check"
 format-code = "ruff:format"
 
@@ -66,7 +66,7 @@ build-backend = "setuptools.build_meta"
 package = false
 
 [tool.setuptools]
-py-modules = ["logai_mcp_server"]
+py-modules = ["sherlog_mcp_server"]
 
 # Linting and formatting configuration
 
@@ -142,7 +142,7 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 
 [tool.ruff.lint.isort]
-known-first-party = ["logai_mcp"]
+known-first-party = ["sherlog_mcp"]
 
 [tool.mypy]
 python_version = "3.10"

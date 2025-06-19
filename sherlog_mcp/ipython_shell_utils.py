@@ -5,7 +5,7 @@ from typing import Any
 from IPython.core.interactiveshell import InteractiveShell
 from IPython.core.completer import IPCompleter
 
-from logai_mcp.session import app, logger
+from sherlog_mcp.session import app, logger
 
 _SHELL: InteractiveShell = InteractiveShell.instance()
 _SHELL.reset()

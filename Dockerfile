@@ -11,8 +11,8 @@ RUN pip install --no-cache-dir uv
 WORKDIR /app
 
 COPY pyproject.toml ./
-COPY logai_mcp ./logai_mcp
-COPY logai_mcp_server.py ./
+COPY sherlog_mcp ./sherlog_mcp
+COPY sherlog_mcp_server.py ./
 
 RUN uv pip install --system .
 
@@ -34,8 +34,8 @@ COPY --from=builder /usr/local /usr/local
 COPY --from=builder /root/nltk_data /root/nltk_data
 
 WORKDIR /app
-COPY logai_mcp ./logai_mcp
-COPY logai_mcp_server.py ./
+COPY sherlog_mcp ./sherlog_mcp
+COPY sherlog_mcp_server.py ./
 
 # Create data directory for session persistence
 RUN mkdir -p /app/data
@@ -43,4 +43,4 @@ RUN mkdir -p /app/data
 # Expose port for streamable-http transport
 EXPOSE 8000
 
-ENTRYPOINT ["uv", "run", "-m", "logai_mcp.server"] 
+ENTRYPOINT ["uv", "run", "-m", "sherlog_mcp.server"] 

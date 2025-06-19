@@ -1,4 +1,4 @@
-"""External MCP Tools for LogAI MCP Server
+"""External MCP Tools for Sherlog MCP Server
 
 This module provides dynamic integration with external MCP servers.
 It discovers and registers tools from configured MCP servers at runtime,
@@ -15,10 +15,10 @@ import polars as pl
 from mcp import ClientSession, StdioServerParameters, types
 from mcp.client.stdio import stdio_client
 
-from logai_mcp.config import get_settings
-from logai_mcp.dataframe_utils import smart_create_dataframe, to_json_serializable
-from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
-from logai_mcp.session import app, logger
+from sherlog_mcp.config import get_settings
+from sherlog_mcp.dataframe_utils import smart_create_dataframe, to_json_serializable
+from sherlog_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
+from sherlog_mcp.session import app, logger
 
 
 def _external_mcps_available() -> bool:
@@ -37,7 +37,7 @@ async def auto_register_external_mcps():
     """Automatically discover and register all tools from configured external MCPs.
 
     This function is called during server startup to dynamically add tools
-    from external MCP servers to the LogAI MCP server.
+    from external MCP servers to the Sherlog MCP server.
     """
     settings = get_settings()
     external_mcps = settings.external_mcps

@@ -1,4 +1,4 @@
-"""GitHub Tools for LogAI MCP Server
+"""GitHub Tools for Sherlog MCP Server
 
 This module provides tools for interacting with GitHub repositories, issues, and pull requests.
 All operations are logged and can be accessed through audit endpoints.
@@ -9,9 +9,9 @@ Tools are only registered if GitHub PAT token is available.
 import pandas as pd
 import requests
 
-from logai_mcp.config import get_settings
-from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
-from logai_mcp.session import (
+from sherlog_mcp.config import get_settings
+from sherlog_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
+from sherlog_mcp.session import (
     app,
     logger,
 )

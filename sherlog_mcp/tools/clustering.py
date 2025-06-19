@@ -14,8 +14,8 @@ import pandas as pd
 from logai.algorithms.clustering_algo.kmeans import KMeansParams
 from logai.analysis.clustering import Clustering, ClusteringConfig
 
-from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
-from logai_mcp.session import (
+from sherlog_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
+from sherlog_mcp.session import (
     app,
     logger,
 )

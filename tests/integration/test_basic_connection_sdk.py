@@ -14,7 +14,7 @@ async def test_health_endpoint():
         assert response.status_code == 200
         data = response.json()
         assert data['status'] == 'ok'
-        assert data['service'] == 'LogAI MCP'
+        assert data['service'] == 'Sherlog MCP'
 
 
 @pytest.mark.asyncio
@@ -30,7 +30,7 @@ async def test_mcp_initialize_with_sdk():
             result = await session.initialize()
             
             # Verify initialization response
-            assert result.serverInfo.name == "LogAIMCP"
+            assert result.serverInfo.name == "SherlogMCP"
             assert result.serverInfo.version is not None
             
             # Verify capabilities if present

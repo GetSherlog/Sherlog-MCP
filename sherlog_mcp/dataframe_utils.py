@@ -1,4 +1,4 @@
-"""DataFrame compatibility utilities for LogAI MCP.
+"""DataFrame compatibility utilities for Sherlog MCP.
 
 This module provides a bridge between polars and pandas DataFrames,
 allowing the codebase to use polars for performance while maintaining

@@ -1,4 +1,4 @@
-"""Filesystem tools for the LogAI MCP server.
+"""Filesystem tools for the Sherlog MCP server.
 
 This module provides a collection of tools for interacting with the filesystem,
 inspired by the @modelcontextprotocol/server-filesystem. Operations are restricted
@@ -19,9 +19,9 @@ from typing import Any
 
 import pandas as pd
 
-from logai_mcp.dataframe_utils import read_csv_smart, to_pandas
-from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
-from logai_mcp.session import app, logger
+from sherlog_mcp.dataframe_utils import read_csv_smart, to_pandas
+from sherlog_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
+from sherlog_mcp.session import app, logger
 
 # Initialize ALLOWED_DIRECTORIES from environment variable
 ALLOWED_DIRECTORIES: list[str] = []

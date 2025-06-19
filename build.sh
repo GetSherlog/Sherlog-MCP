@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Build and push LogAI MCP Docker image
+# Build and push Sherlog MCP Docker image
 # Usage: ./build.sh [version]
 # If no version is provided, it will increment the patch version
 
@@ -9,7 +9,7 @@ set -e
 # Default values
 REGISTRY="ghcr.io"
 NAMESPACE="navneet-mkr"
-IMAGE_NAME="logai-mcp"
+IMAGE_NAME="sherlog-mcp"
 FULL_IMAGE_NAME="$REGISTRY/$NAMESPACE/$IMAGE_NAME"
 
 # Function to get the latest version from git tags or default to 0.1.0

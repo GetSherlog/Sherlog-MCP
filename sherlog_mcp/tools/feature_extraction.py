@@ -15,8 +15,8 @@ from logai.information_extraction.feature_extractor import (
     FeatureExtractorConfig,
 )
 
-from logai_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
-from logai_mcp.session import (
+from sherlog_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
+from sherlog_mcp.session import (
     app,
     logger,
 )
