@@ -35,15 +35,86 @@ def _df_column_matcher(text):
 _SHELL.Completer.custom_matchers.append(_df_column_matcher)
 
 
+class SmartMemoryManager:
+    """Automatically manages IPython session memory to prevent bloat."""
+    
+    def __init__(self):
+        import os
+        self.execution_count = 0
+        self.last_reset_count = 0
+        # Configurable via environment variable
+        self.reset_threshold = int(os.getenv('MCP_AUTO_RESET_THRESHOLD', '50'))
+        self.auto_reset_enabled = os.getenv('MCP_AUTO_RESET_ENABLED', 'true').lower() == 'true'
+        
+    def should_reset(self) -> bool:
+        """Check if we should reset based on execution count and presence of DataFrames."""
+        self.execution_count += 1
+        
+        # If auto-reset is disabled, never reset
+        if not self.auto_reset_enabled:
+            return False
+        
+        # Calculate executions since last reset
+        executions_since_reset = self.execution_count - self.last_reset_count
+        
+        if executions_since_reset >= self.reset_threshold:
+            # Quick check - do we have DataFrames that indicate memory usage?
+            import pandas as pd
+            import polars as pl
+            
+            has_dataframes = any(
+                isinstance(obj, (pd.DataFrame, pl.DataFrame)) 
+                for obj in _SHELL.user_ns.values()
+            )
+            
+            if has_dataframes:
+                self.last_reset_count = self.execution_count
+                return True
+                
+        return False
+    
+    def reset(self):
+        """Smart reset - preserves imports and recent DataFrames."""
+        import pandas as pd
+        import polars as pl
+        
+        # Find the most recent DataFrames (likely still needed)
+        recent_dfs = {}
+        for name, obj in _SHELL.user_ns.items():
+            if isinstance(obj, (pd.DataFrame, pl.DataFrame)) and not name.startswith('_'):
+                # Keep up to 3 most recent DataFrames
+                if len(recent_dfs) < 3:
+                    recent_dfs[name] = obj
+        
+        # Keep imports
+        imports = {k: v for k, v in _SHELL.user_ns.items() 
+                   if hasattr(v, '__module__') and not k.startswith('_')}
+        
+        # Reset shell
+        _SHELL.reset()
+        
+        # Restore imports and recent data
+        _SHELL.user_ns.update(imports)
+        _SHELL.user_ns.update(recent_dfs)
+        
+        # Re-import common libraries
+        _SHELL.run_cell("import pandas as pd\nimport numpy as np\nimport polars as pl")
+        
+        logger.info(f"Auto-reset session after {self.reset_threshold} executions, kept {len(recent_dfs)} recent DataFrames")
+
+
+_SMART_MANAGER = SmartMemoryManager()
+
+
 async def run_code_in_shell(code: str):
+    # Check if we should reset before execution
+    if _SMART_MANAGER.should_reset():
+        _SMART_MANAGER.reset()
+    
     execution_result = await _SHELL.run_cell_async(code)
-
-    if execution_result.error_before_exec:
-        raise execution_result.error_before_exec
-
-    if execution_result.error_in_exec:
-        raise execution_result.error_in_exec
-
+    
+    # Don't raise exceptions here - let the caller handle them
+    # This prevents double-response issues in MCP
     return execution_result
 
 
@@ -112,15 +183,19 @@ async def execute_python_code(code: str):
     execution_details_dict = {}
 
     if result is not None:
-        execution_details_dict["result"] = result.result
+        # Only add result if there was no error
+        if not result.error_before_exec and not result.error_in_exec:
+            execution_details_dict["result"] = result.result
 
         if result.error_before_exec:
             execution_details_dict["error_before_exec"] = str(result.error_before_exec)
+            execution_details_dict["success"] = False
 
         if result.error_in_exec:
             error_type = type(result.error_in_exec).__name__
             error_msg = str(result.error_in_exec)
             execution_details_dict["error_in_exec"] = f"{error_type}: {error_msg}"
+            execution_details_dict["success"] = False
             try:
                 import sys
                 import traceback
@@ -129,6 +204,8 @@ async def execute_python_code(code: str):
                     execution_details_dict["traceback"] = tb_lines[:8192]
             except Exception:
                 pass
+        else:
+            execution_details_dict["success"] = True
 
     if stdout_value:
         execution_details_dict["stdout"] = stdout_value.rstrip()
@@ -1053,6 +1130,57 @@ async def get_magic_help(magic_name: str, magic_type: str = "line") -> dict[str,
             "magic_type": magic_type,
             "magic_name": magic_name,
         }
+
+
+@app.tool()
+async def session_memory_status() -> dict:
+    """Get current session memory management status.
+    
+    Shows execution count, DataFrames in memory, and when auto-reset will occur.
+    """
+    import pandas as pd
+    import polars as pl
+    
+    # Count DataFrames
+    dataframes = []
+    for name, obj in _SHELL.user_ns.items():
+        if isinstance(obj, (pd.DataFrame, pl.DataFrame)) and not name.startswith('_'):
+            df_info = {
+                "name": name,
+                "type": type(obj).__name__,
+                "shape": obj.shape
+            }
+            # Add memory usage for pandas DataFrames
+            if isinstance(obj, pd.DataFrame):
+                df_info["memory_mb"] = round(obj.memory_usage(deep=True).sum() / (1024 * 1024), 2)
+            dataframes.append(df_info)
+    
+    executions_since_reset = _SMART_MANAGER.execution_count - _SMART_MANAGER.last_reset_count
+    executions_until_reset = _SMART_MANAGER.reset_threshold - executions_since_reset
+    
+    return {
+        "auto_reset_enabled": _SMART_MANAGER.auto_reset_enabled,
+        "total_executions": _SMART_MANAGER.execution_count,
+        "executions_since_reset": executions_since_reset,
+        "executions_until_reset": max(0, executions_until_reset),
+        "auto_reset_threshold": _SMART_MANAGER.reset_threshold,
+        "dataframes_count": len(dataframes),
+        "dataframes": dataframes[:10],  # Show up to 10 DataFrames
+        "will_reset_on_next": executions_until_reset <= 0 and len(dataframes) > 0 and _SMART_MANAGER.auto_reset_enabled
+    }
+
+
+@app.tool()
+async def reset_session_now() -> dict:
+    """Manually trigger a session reset.
+    
+    This will clear most variables but preserve imports and recent DataFrames.
+    """
+    _SMART_MANAGER.reset()
+    return {
+        "status": "Session reset complete",
+        "message": "Imports and recent DataFrames preserved"
+    }
 
 
 @app.tool()

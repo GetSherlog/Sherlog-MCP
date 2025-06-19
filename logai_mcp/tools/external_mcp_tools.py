@@ -264,15 +264,38 @@ def register_external_tool(
                 save_as=save_as,
             )
 
-            execution_result = await run_code_in_shell(code)
-
             try:
+                execution_result = await run_code_in_shell(code)
+                
+                # Check if the execution resulted in an error
+                if execution_result and hasattr(execution_result, 'error_in_exec') and execution_result.error_in_exec:
+                    # Return the error information instead of trying to get the result
+                    error_msg = str(execution_result.error_in_exec)
+                    return {
+                        "error": error_msg,
+                        "error_type": type(execution_result.error_in_exec).__name__,
+                        "tool": tool_info.name,
+                        "mcp": mcp_name,
+                        "suggestion": "Operation failed. Check error details."
+                    }
+                
                 shell_result = _SHELL.user_ns.get(save_as)
                 if isinstance(shell_result, (pd.DataFrame, pl.DataFrame)):
                     return to_json_serializable(shell_result)
-                return execution_result.result if execution_result else None
-            except:
-                return execution_result.result if execution_result else None
+                elif isinstance(shell_result, dict) and "error" in shell_result:
+                    # If the result is an error dictionary, return it as-is
+                    return shell_result
+                else:
+                    return execution_result.result if execution_result else None
+            except Exception as e:
+                # Return error information instead of re-raising
+                return {
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "tool": tool_info.name,
+                    "mcp": mcp_name,
+                    "suggestion": "Tool execution failed"
+                }
 
         tool_impl.__name__ = full_tool_name
         tool_impl.__doc__ = "\n".join(doc_lines)
