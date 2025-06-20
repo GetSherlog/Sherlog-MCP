@@ -230,26 +230,75 @@ In multi-agent scenarios, the IPython workspace acts as a shared blackboard:
 
 ## Available Tools
 
-### Session Management
+Sherlog MCP provides a comprehensive set of native tools optimized for the IPython workspace, with the ability to extend functionality through external MCP servers.
+
+### Native Tools (Built-in)
+
+Our native tools are designed to work seamlessly with the DataFrame-centric architecture:
+
+#### Session Management
 - `execute_python_code`: Run arbitrary Python code in the workspace
 - `list_shell_variables`: See all available DataFrames and variables
 - `session_memory_status`: Monitor memory usage and auto-reset status
 - `reset_session_now`: Manually trigger a session cleanup
 
-### Data Loading
-- `load_file_log_data`: Load logs from CSV/JSON into DataFrames
-- `s3_list_files` / `s3_download_file`: Access S3 data
-- `cloudwatch_fetch_logs`: Pull CloudWatch logs
-- `github_fetch_*`: Access GitHub data (issues, PRs, commits)
+#### Data Sources & Loading
+- **Local Files**: `load_file_log_data`, `read_file`, `write_file`
+- **AWS S3**: `s3_list_files`, `s3_download_file`, `s3_upload_file`
+- **AWS CloudWatch**: `cloudwatch_fetch_logs`, `cloudwatch_get_metrics`
+- **GitHub**: `github_fetch_issues`, `github_fetch_pull_requests`, `github_fetch_commits`
+- **Grafana**: `grafana_query_prometheus`, `grafana_query_loki`
+- **Sentry**: `sentry_fetch_issues`, `sentry_fetch_events`
+- **Mixpanel**: `mixpanel_query_jql`, `mixpanel_get_events`
 
-### Log Analysis (LogAI)
-- `detect_anomalies`: Find anomalies in time-series log data
-- `cluster_logs`: Group similar log entries
-- `extract_features`: Generate features from log text
+#### Log Analysis (Powered by LogAI)
+- `detect_anomalies`: Time-series and semantic anomaly detection
+- `cluster_logs`: Group similar log entries using various algorithms
+- `extract_features`: Generate ML features from log text
 - `parse_logs`: Extract structured data from unstructured logs
+- `vectorize_logs`: Convert logs to numerical representations
 
-### External Tools
-Any tool from connected MCP servers appears with prefix `external_[server]_[tool]`
+#### Development Tools
+- **Docker**: `docker_list_containers`, `docker_logs`, `docker_exec`
+- **Kubernetes**: `k8s_get_pods`, `k8s_get_logs`, `k8s_describe_resource`
+- **Code Analysis**: `analyze_code_structure`, `search_codebase`
+
+### External MCP Integration
+
+While Sherlog MCP includes many tools natively, you can connect any MCP server to extend functionality. External tools are automatically integrated into the IPython workspace:
+
+#### How It Works
+1. External tools are prefixed: `external_[server]_[tool]`
+2. Results automatically convert to DataFrames
+3. Full access to the same IPython namespace
+
+#### Popular External MCPs
+- **Filesystem**: Advanced file operations beyond our built-in tools
+- **PostgreSQL/MySQL**: Direct database queries
+- **Weather**: Real-time weather data
+- **Slack**: Send messages and read channels
+- **Google Sheets**: Spreadsheet operations
+
+#### Adding External MCPs
+```json
+"-e", "EXTERNAL_MCPS_JSON={\"postgres\":{\"command\":\"npx\",\"args\":[\"-y\",\"@modelcontextprotocol/server-postgres\"],\"env\":{\"DATABASE_URL\":\"$DATABASE_URL\"}}}"
+```
+
+### Why Native Tools Are Better
+
+Native tools in Sherlog MCP offer advantages over external MCPs:
+- **DataFrame Integration**: Results are automatically structured as DataFrames
+- **Session Awareness**: Tools can access and modify the IPython namespace
+- **Optimized Performance**: No subprocess overhead
+- **Unified Error Handling**: Consistent error messages and recovery
+- **Cross-Tool State**: Results from one tool are immediately available to others
+
+### Tool Discovery
+
+To see all available tools in your session:
+1. Native tools: Check the list above
+2. External tools: Use `list_external_tools()` to see connected MCP servers
+3. In Claude: Ask "What tools do you have available?"
 
 ## Architecture
 
