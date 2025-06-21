@@ -159,6 +159,7 @@ The Docker configuration includes two types of mounts:
 # Session Management
 export MCP_AUTO_RESET_THRESHOLD=50      # Operations before auto-cleanup
 export MCP_AUTO_RESET_ENABLED=true      # Enable automatic memory management
+export MCP_MAX_OUTPUT_SIZE=50000        # Max output size per buffer (default: 50KB)
 
 # Logging
 export LOG_LEVEL=INFO

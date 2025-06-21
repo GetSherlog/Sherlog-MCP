@@ -168,13 +168,11 @@ def _list_pods_impl(
                 (datetime.now(created.tzinfo) - created).days if created else None
             )
 
-            # Calculate ready containers
             ready_count = 0
             total_count = len(pod.status.container_statuses or [])
             if pod.status.container_statuses:
                 ready_count = sum(1 for cs in pod.status.container_statuses if cs.ready)
 
-            # Calculate restart count
             restart_count = 0
             if pod.status.container_statuses:
                 restart_count = sum(
@@ -200,7 +198,6 @@ def _list_pods_impl(
             rows.append(row)
 
         logger.info(f"Retrieved {len(rows)} pods")
-        # Use smart DataFrame creation for better performance with polars when available
         df = smart_create_dataframe(rows, prefer_polars=True)
         return to_pandas(df)
 
@@ -300,7 +297,6 @@ def _list_services_impl(namespace: str = "default") -> pd.DataFrame:
                 (datetime.now(created.tzinfo) - created).days if created else None
             )
 
-            # Format ports
             ports = []
             if svc.spec.ports:
                 for port in svc.spec.ports:
@@ -311,7 +307,6 @@ def _list_services_impl(namespace: str = "default") -> pd.DataFrame:
                         port_str += f"/{port.protocol}"
                     ports.append(port_str)
 
-            # Format external IPs
             external_ips = []
             if svc.status.load_balancer and svc.status.load_balancer.ingress:
                 for ingress in svc.status.load_balancer.ingress:
@@ -450,7 +445,6 @@ def _list_events_impl(namespace: str = "default", limit: int = 100) -> pd.DataFr
 
         rows = []
         for event in events.items:
-            # Sort by last_timestamp to get most recent events first
             last_seen = event.last_timestamp or event.first_timestamp
 
             object_ref = ""
@@ -479,7 +473,6 @@ def _list_events_impl(namespace: str = "default", limit: int = 100) -> pd.DataFr
             }
             rows.append(row)
 
-        # Sort by last_seen (most recent first)
         df = pd.DataFrame(rows)
         if not df.empty and "last_seen" in df.columns:
             df = df.sort_values("last_seen", ascending=False, na_position="last")
@@ -512,7 +505,6 @@ def _get_pod_details_impl(pod_name: str, namespace: str = "default") -> pd.DataF
         logger.info(f"Getting details for pod {pod_name} in namespace {namespace}")
         response = v1.read_namespaced_pod(name=pod_name, namespace=namespace)
 
-        # Ensure we have a proper pod object
         if isinstance(response, str):
             raise Exception(f"Unexpected response type: {type(response)}")
 
@@ -520,7 +512,6 @@ def _get_pod_details_impl(pod_name: str, namespace: str = "default") -> pd.DataF
         created = pod.metadata.creation_timestamp  # type: ignore
         age_days = (datetime.now(created.tzinfo) - created).days if created else None
 
-        # Container information
         containers_info = []
         if pod.spec.containers:  # type: ignore
             for container in pod.spec.containers:  # type: ignore
@@ -541,7 +532,6 @@ def _get_pod_details_impl(pod_name: str, namespace: str = "default") -> pd.DataF
                 }
                 containers_info.append(container_info)
 
-        # Container status information
         container_statuses = []
         if pod.status.container_statuses:  # type: ignore
             for status in pod.status.container_statuses:  # type: ignore
@@ -554,7 +544,6 @@ def _get_pod_details_impl(pod_name: str, namespace: str = "default") -> pd.DataF
                 }
                 container_statuses.append(status_info)
 
-        # Conditions
         conditions = []
         if pod.status.conditions:  # type: ignore
             for condition in pod.status.conditions:  # type: ignore
@@ -637,7 +626,6 @@ def _list_nodes_impl() -> pd.DataFrame:
                 (datetime.now(created.tzinfo) - created).days if created else None
             )
 
-            # Determine node roles
             roles = []
             if node.metadata.labels:
                 for label_key in node.metadata.labels:
@@ -645,7 +633,6 @@ def _list_nodes_impl() -> pd.DataFrame:
                         role = label_key.replace("node-role.kubernetes.io/", "")
                         roles.append(role)
 
-            # Get node status
             status = "Unknown"
             if node.status.conditions:
                 for condition in node.status.conditions:
@@ -691,7 +678,6 @@ def _list_nodes_impl() -> pd.DataFrame:
         raise
 
 
-# Push implementation functions to shell
 _SHELL.push(
     {
         "list_namespaces_impl": _list_namespaces_impl,
@@ -706,12 +692,7 @@ _SHELL.push(
 )
 
 
-# Conditional tool registration based on Kubernetes availability
 if _kubernetes_available():
-    logger.info("Kubernetes cluster detected - registering Kubernetes tools")
-
-    # MCP Tool implementations
-
     @app.tool()
     async def list_namespaces(*, save_as: str) -> pd.DataFrame | None:
         """List all namespaces in the Kubernetes cluster.

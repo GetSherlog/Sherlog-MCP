@@ -13,7 +13,10 @@ import os
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 
+import pandas as pd
+
 from sherlog_mcp.config import get_settings
+from sherlog_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 from sherlog_mcp.session import app
 
 logger = logging.getLogger(__name__)
@@ -29,7 +32,6 @@ def _aws_credentials_available() -> bool:
         return False
 
 
-# Only define tools if AWS credentials are available
 if _aws_credentials_available():
     logger.info("AWS credentials detected - registering S3 tools")
 
@@ -38,7 +40,7 @@ if _aws_credentials_available():
         try:
             settings = get_settings()
 
-            # Create session with credentials from settings if available
+
             session_kwargs = {}
 
             if settings.aws_access_key_id and settings.aws_secret_access_key:
@@ -50,13 +52,11 @@ if _aws_credentials_available():
 
                 logger.info("Using AWS credentials from configuration settings")
             else:
-                # Fall back to default credential chain (environment variables, ~/.aws/credentials, IAM roles, etc.)
                 logger.info("Using AWS default credential chain")
 
             session = boto3.Session(**session_kwargs)
             s3_client = session.client("s3", region_name=settings.aws_region)
 
-            # Test the connection by listing buckets (this will fail if no credentials)
             s3_client.list_buckets()
 
             logger.info(
@@ -91,411 +91,196 @@ if _aws_credentials_available():
             logger.error(f"Failed to initialize S3 client: {str(e)}")
             raise Exception(f"Failed to initialize S3 client: {str(e)}")
 
-    @app.tool()
-    def list_s3_buckets() -> str:
-        """List all S3 buckets in the AWS account.
+    def _list_s3_buckets_impl() -> pd.DataFrame:
+        """Return S3 buckets as a DataFrame."""
+        s3_client = get_s3_client()
+        response = s3_client.list_buckets()
 
-        Returns:
-            str: JSON string containing list of bucket information including names and creation dates.
-
-        """
-        try:
-            s3_client = get_s3_client()
-            response = s3_client.list_buckets()
-
-            buckets = []
-            for bucket in response.get("Buckets", []):
-                buckets.append(
-                    {
-                        "name": bucket["Name"],
-                        "creation_date": bucket["CreationDate"].isoformat()
-                        if bucket.get("CreationDate")
-                        else None,
-                    }
-                )
-
-            result = {"buckets": buckets, "count": len(buckets)}
-
-            logger.info(f"Listed {len(buckets)} S3 buckets")
-            return json.dumps(result, indent=2)
-
-        except Exception as e:
-            error_msg = f"Failed to list S3 buckets: {str(e)}"
-            logger.error(error_msg)
-            return json.dumps({"error": error_msg})
-
-    @app.tool()
-    def create_s3_bucket(bucket_name: str, region: str | None = None) -> str:
-        """Create a new S3 bucket.
-
-        Args:
-            bucket_name: Name of the bucket to create (must be globally unique)
-            region: AWS region for the bucket (defaults to configured region)
-
-        Returns:
-            str: JSON string with creation result
-
-        """
-        try:
-            s3_client = get_s3_client()
-            settings = get_settings()
-
-            if not region:
-                region = settings.aws_region
-
-            # Create bucket with appropriate configuration
-            if region == "us-east-1":
-                # us-east-1 doesn't need LocationConstraint
-                s3_client.create_bucket(Bucket=bucket_name)
-            else:
-                s3_client.create_bucket(
-                    Bucket=bucket_name,
-                    CreateBucketConfiguration={"LocationConstraint": region},
-                )
-
-            result = {
-                "success": True,
-                "bucket_name": bucket_name,
-                "region": region,
-                "message": f"Bucket {bucket_name} created successfully in {region}",
+        rows = [
+            {
+                "name": bucket["Name"],
+                "creation_date": bucket.get("CreationDate").isoformat()
+                if bucket.get("CreationDate")
+                else None,
             }
+            for bucket in response.get("Buckets", [])
+        ]
 
-            logger.info(f"Created S3 bucket: {bucket_name} in region: {region}")
-            return json.dumps(result, indent=2)
+        df = pd.DataFrame(rows)
+        logger.info("Listed %s S3 buckets", len(rows))
+        return df
 
-        except ClientError as e:
-            error_code = e.response["Error"]["Code"]
-            if error_code == "BucketAlreadyExists":
-                error_msg = f"Bucket {bucket_name} already exists and is owned by another account"
-            elif error_code == "BucketAlreadyOwnedByYou":
-                error_msg = f"Bucket {bucket_name} already exists and is owned by you"
-            else:
-                error_msg = f"Failed to create bucket {bucket_name}: {str(e)}"
+    def _list_s3_objects_impl(
+        bucket_name: str, prefix: str = "", max_keys: int = 100
+    ) -> pd.DataFrame:
+        """Return objects in a bucket as DataFrame."""
+        s3_client = get_s3_client()
+        max_keys = min(max_keys, 1000)
+        params = {"Bucket": bucket_name, "MaxKeys": max_keys}
+        if prefix:
+            params["Prefix"] = prefix
 
-            logger.error(error_msg)
-            return json.dumps({"error": error_msg})
+        response = s3_client.list_objects_v2(**params)
 
-        except Exception as e:
-            error_msg = f"Failed to create bucket {bucket_name}: {str(e)}"
-            logger.error(error_msg)
-            return json.dumps({"error": error_msg})
-
-    @app.tool()
-    def delete_s3_bucket(bucket_name: str, force: bool = False) -> str:
-        """Delete an S3 bucket.
-
-        Args:
-            bucket_name: Name of the bucket to delete
-            force: If True, delete all objects in the bucket first (use with caution!)
-
-        Returns:
-            str: JSON string with deletion result
-
-        """
-        try:
-            s3_client = get_s3_client()
-
-            if force:
-                # First delete all objects in the bucket
-                logger.warning(f"Force deleting all objects in bucket: {bucket_name}")
-
-                # List and delete all objects
-                paginator = s3_client.get_paginator("list_objects_v2")
-                for page in paginator.paginate(Bucket=bucket_name):
-                    if "Contents" in page:
-                        objects = [{"Key": obj["Key"]} for obj in page["Contents"]]
-                        s3_client.delete_objects(
-                            Bucket=bucket_name, Delete={"Objects": objects}
-                        )
-
-                # List and delete all object versions (for versioned buckets)
-                try:
-                    version_paginator = s3_client.get_paginator("list_object_versions")
-                    for page in version_paginator.paginate(Bucket=bucket_name):
-                        if "Versions" in page:
-                            versions = [
-                                {"Key": obj["Key"], "VersionId": obj["VersionId"]}
-                                for obj in page["Versions"]
-                            ]
-                            s3_client.delete_objects(
-                                Bucket=bucket_name, Delete={"Objects": versions}
-                            )
-                        if "DeleteMarkers" in page:
-                            delete_markers = [
-                                {"Key": obj["Key"], "VersionId": obj["VersionId"]}
-                                for obj in page["DeleteMarkers"]
-                            ]
-                            s3_client.delete_objects(
-                                Bucket=bucket_name, Delete={"Objects": delete_markers}
-                            )
-                except:
-                    pass  # Bucket might not have versioning enabled
-
-            # Delete the bucket
-            s3_client.delete_bucket(Bucket=bucket_name)
-
-            result = {
-                "success": True,
-                "bucket_name": bucket_name,
-                "message": f"Bucket {bucket_name} deleted successfully",
-            }
-
-            logger.info(f"Deleted S3 bucket: {bucket_name}")
-            return json.dumps(result, indent=2)
-
-        except ClientError as e:
-            error_code = e.response["Error"]["Code"]
-            if error_code == "BucketNotEmpty":
-                error_msg = f"Bucket {bucket_name} is not empty. Use force=True to delete all objects first"
-            elif error_code == "NoSuchBucket":
-                error_msg = f"Bucket {bucket_name} does not exist"
-            else:
-                error_msg = f"Failed to delete bucket {bucket_name}: {str(e)}"
-
-            logger.error(error_msg)
-            return json.dumps({"error": error_msg})
-
-        except Exception as e:
-            error_msg = f"Failed to delete bucket {bucket_name}: {str(e)}"
-            logger.error(error_msg)
-            return json.dumps({"error": error_msg})
-
-    @app.tool()
-    def list_s3_objects(bucket_name: str, prefix: str = "", max_keys: int = 100) -> str:
-        """List objects in an S3 bucket.
-
-        Args:
-            bucket_name: Name of the S3 bucket
-            prefix: Filter objects by prefix (optional)
-            max_keys: Maximum number of objects to return (default 100, max 1000)
-
-        Returns:
-            str: JSON string containing list of objects with metadata
-
-        """
-        try:
-            s3_client = get_s3_client()
-
-            # Limit max_keys to prevent overwhelming responses
-            max_keys = min(max_keys, 1000)
-
-            params = {"Bucket": bucket_name, "MaxKeys": max_keys}
-
-            if prefix:
-                params["Prefix"] = prefix
-
-            response = s3_client.list_objects_v2(**params)
-
-            objects = []
-            for obj in response.get("Contents", []):
-                objects.append(
-                    {
-                        "key": obj["Key"],
-                        "size": obj["Size"],
-                        "last_modified": obj["LastModified"].isoformat()
-                        if obj.get("LastModified")
-                        else None,
-                        "etag": obj.get("ETag", "").strip('"'),
-                        "storage_class": obj.get("StorageClass", "STANDARD"),
-                    }
-                )
-
-            result = {
+        rows = [
+            {
                 "bucket": bucket_name,
-                "prefix": prefix,
-                "objects": objects,
-                "count": len(objects),
-                "is_truncated": response.get("IsTruncated", False),
-                "total_size_bytes": sum(obj["size"] for obj in objects),
+                "key": obj["Key"],
+                "size": obj["Size"],
+                "last_modified": obj.get("LastModified").isoformat()
+                if obj.get("LastModified")
+                else None,
+                "etag": obj.get("ETag", "").strip("\""),
+                "storage_class": obj.get("StorageClass", "STANDARD"),
             }
+            for obj in response.get("Contents", [])
+        ]
 
-            logger.info(f"Listed {len(objects)} objects in S3 bucket: {bucket_name}")
-            return json.dumps(result, indent=2)
+        df = pd.DataFrame(rows)
+        logger.info("Listed %s objects in %s", len(rows), bucket_name)
+        return df
 
-        except ClientError as e:
-            error_code = e.response["Error"]["Code"]
-            if error_code == "NoSuchBucket":
-                error_msg = f"Bucket {bucket_name} does not exist"
-            else:
-                error_msg = f"Failed to list objects in bucket {bucket_name}: {str(e)}"
-
-            logger.error(error_msg)
-            return json.dumps({"error": error_msg})
-
-        except Exception as e:
-            error_msg = f"Failed to list objects in bucket {bucket_name}: {str(e)}"
-            logger.error(error_msg)
-            return json.dumps({"error": error_msg})
+    _SHELL.push(
+        {
+            "_list_s3_buckets_impl": _list_s3_buckets_impl,
+            "_list_s3_objects_impl": _list_s3_objects_impl,
+        }
+    )
 
     @app.tool()
-    def upload_s3_object(
+    async def list_s3_buckets(*, save_as: str = "s3_buckets") -> pd.DataFrame | None:
+        """List S3 buckets and return a DataFrame."""
+        code = f"{save_as} = _list_s3_buckets_impl()\n{save_as}"
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
+
+    @app.tool()
+    async def list_s3_objects(
+        bucket_name: str,
+        prefix: str = "",
+        max_keys: int = 100,
+        *,
+        save_as: str = "s3_objects",
+    ) -> pd.DataFrame | None:
+        """List objects in an S3 bucket and return as DataFrame."""
+        code = (
+            f"{save_as} = _list_s3_objects_impl(\"{bucket_name}\", \"{prefix}\", {max_keys})\n"
+            f"{save_as}"
+        )
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
+
+    def _upload_s3_object_impl(
         bucket_name: str, key: str, file_path: str, content_type: str | None = None
     ) -> str:
-        """Upload a file to S3.
+        import mimetypes, json as _json
+        s3_client = get_s3_client()
+        if not os.path.exists(file_path):
+            return _json.dumps({"error": f"Local file does not exist: {file_path}"})
 
-        Args:
-            bucket_name: Name of the S3 bucket
-            key: S3 object key (path/filename in S3)
-            file_path: Local file path to upload
-            content_type: MIME type of the file (auto-detected if not provided)
-
-        Returns:
-            str: JSON string with upload result
-
-        """
-        try:
-            import mimetypes
-
-            s3_client = get_s3_client()
-
-            # Check if local file exists
-            if not os.path.exists(file_path):
-                error_msg = f"Local file does not exist: {file_path}"
-                logger.error(error_msg)
-                return json.dumps({"error": error_msg})
-
-            # Auto-detect content type if not provided
+        if not content_type:
+            content_type, _ = mimetypes.guess_type(file_path)
             if not content_type:
-                content_type, _ = mimetypes.guess_type(file_path)
-                if not content_type:
-                    content_type = "application/octet-stream"
+                content_type = "application/octet-stream"
 
-            # Get file size
-            file_size = os.path.getsize(file_path)
+        file_size = os.path.getsize(file_path)
+        s3_client.upload_file(file_path, bucket_name, key, ExtraArgs={"ContentType": content_type})
 
-            # Upload file
-            extra_args = {"ContentType": content_type}
-            s3_client.upload_file(file_path, bucket_name, key, ExtraArgs=extra_args)
+        result = {
+            "success": True,
+            "bucket": bucket_name,
+            "key": key,
+            "file_path": file_path,
+            "content_type": content_type,
+            "size_bytes": file_size,
+            "s3_url": f"s3://{bucket_name}/{key}",
+        }
+        return _json.dumps(result, indent=2)
 
-            result = {
-                "success": True,
-                "bucket": bucket_name,
-                "key": key,
-                "file_path": file_path,
-                "content_type": content_type,
-                "size_bytes": file_size,
-                "s3_url": f"s3://{bucket_name}/{key}",
-                "message": f"File uploaded successfully to s3://{bucket_name}/{key}",
-            }
-
-            logger.info(f"Uploaded file {file_path} to s3://{bucket_name}/{key}")
-            return json.dumps(result, indent=2)
-
-        except ClientError as e:
-            error_code = e.response["Error"]["Code"]
-            if error_code == "NoSuchBucket":
-                error_msg = f"Bucket {bucket_name} does not exist"
-            else:
-                error_msg = f"Failed to upload {file_path} to s3://{bucket_name}/{key}: {str(e)}"
-
-            logger.error(error_msg)
-            return json.dumps({"error": error_msg})
-
-        except Exception as e:
-            error_msg = (
-                f"Failed to upload {file_path} to s3://{bucket_name}/{key}: {str(e)}"
-            )
-            logger.error(error_msg)
-            return json.dumps({"error": error_msg})
-
-    @app.tool()
-    def download_s3_object(bucket_name: str, key: str, download_path: str) -> str:
-        """Download an object from S3.
-
-        Args:
-            bucket_name: Name of the S3 bucket
-            key: S3 object key to download
-            download_path: Local path where the file should be saved
-
-        Returns:
-            str: JSON string with download result
-
-        """
-        try:
-            s3_client = get_s3_client()
-
-            # Create directory if it doesn't exist
-            os.makedirs(os.path.dirname(download_path), exist_ok=True)
-
-            # Download file
-            s3_client.download_file(bucket_name, key, download_path)
-
-            # Get file size
-            file_size = os.path.getsize(download_path)
-
-            result = {
+    def _download_s3_object_impl(bucket_name: str, key: str, download_path: str) -> str:
+        import json as _json
+        s3_client = get_s3_client()
+        os.makedirs(os.path.dirname(download_path), exist_ok=True)
+        s3_client.download_file(bucket_name, key, download_path)
+        file_size = os.path.getsize(download_path)
+        return _json.dumps(
+            {
                 "success": True,
                 "bucket": bucket_name,
                 "key": key,
                 "download_path": download_path,
                 "size_bytes": file_size,
                 "s3_url": f"s3://{bucket_name}/{key}",
-                "message": f"File downloaded successfully from s3://{bucket_name}/{key}",
-            }
+            },
+            indent=2,
+        )
 
-            logger.info(f"Downloaded s3://{bucket_name}/{key} to {download_path}")
-            return json.dumps(result, indent=2)
-
-        except ClientError as e:
-            error_code = e.response["Error"]["Code"]
-            if error_code == "NoSuchBucket":
-                error_msg = f"Bucket {bucket_name} does not exist"
-            elif error_code == "NoSuchKey":
-                error_msg = f"Object {key} does not exist in bucket {bucket_name}"
-            else:
-                error_msg = f"Failed to download s3://{bucket_name}/{key}: {str(e)}"
-
-            logger.error(error_msg)
-            return json.dumps({"error": error_msg})
-
-        except Exception as e:
-            error_msg = f"Failed to download s3://{bucket_name}/{key}: {str(e)}"
-            logger.error(error_msg)
-            return json.dumps({"error": error_msg})
-
-    @app.tool()
-    def delete_s3_object(bucket_name: str, key: str) -> str:
-        """Delete an object from S3.
-
-        Args:
-            bucket_name: Name of the S3 bucket
-            key: S3 object key to delete
-
-        Returns:
-            str: JSON string with deletion result
-
-        """
-        try:
-            s3_client = get_s3_client()
-
-            # Delete object
-            s3_client.delete_object(Bucket=bucket_name, Key=key)
-
-            result = {
+    def _delete_s3_object_impl(bucket_name: str, key: str) -> str:
+        import json as _json
+        s3_client = get_s3_client()
+        s3_client.delete_object(Bucket=bucket_name, Key=key)
+        return _json.dumps(
+            {
                 "success": True,
                 "bucket": bucket_name,
                 "key": key,
                 "s3_url": f"s3://{bucket_name}/{key}",
-                "message": f"Object deleted successfully from s3://{bucket_name}/{key}",
-            }
+            },
+            indent=2,
+        )
 
-            logger.info(f"Deleted s3://{bucket_name}/{key}")
-            return json.dumps(result, indent=2)
+    _SHELL.push(
+        {
+            "_upload_s3_object_impl": _upload_s3_object_impl,
+            "_download_s3_object_impl": _download_s3_object_impl,
+            "_delete_s3_object_impl": _delete_s3_object_impl,
+        }
+    )
 
-        except ClientError as e:
-            error_code = e.response["Error"]["Code"]
-            if error_code == "NoSuchBucket":
-                error_msg = f"Bucket {bucket_name} does not exist"
-            else:
-                error_msg = f"Failed to delete s3://{bucket_name}/{key}: {str(e)}"
+    @app.tool()
+    async def upload_s3_object(
+        bucket_name: str,
+        key: str,
+        file_path: str,
+        content_type: str | None = None,
+        *,
+        save_as: str = "s3_upload_result",
+    ) -> str | None:
+        code = (
+            f'{save_as} = _upload_s3_object_impl("{bucket_name}", "{key}", "{file_path}", {repr(content_type)})\n'
+            f"{save_as}"
+        )
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
-            logger.error(error_msg)
-            return json.dumps({"error": error_msg})
+    @app.tool()
+    async def download_s3_object(
+        bucket_name: str,
+        key: str,
+        download_path: str,
+        *,
+        save_as: str = "s3_download_result",
+    ) -> str | None:
+        code = (
+            f'{save_as} = _download_s3_object_impl("{bucket_name}", "{key}", "{download_path}")\n'
+            f"{save_as}"
+        )
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
-        except Exception as e:
-            error_msg = f"Failed to delete s3://{bucket_name}/{key}: {str(e)}"
-            logger.error(error_msg)
-            return json.dumps({"error": error_msg})
+    @app.tool()
+    async def delete_s3_object(
+        bucket_name: str,
+        key: str,
+        *,
+        save_as: str = "s3_delete_result",
+    ) -> str | None:
+        code = (
+            f'{save_as} = _delete_s3_object_impl("{bucket_name}", "{key}")\n'
+            f"{save_as}"
+        )
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     @app.tool()
     def get_s3_object_info(bucket_name: str, key: str) -> str:
@@ -512,7 +297,6 @@ if _aws_credentials_available():
         try:
             s3_client = get_s3_client()
 
-            # Get object metadata
             response = s3_client.head_object(Bucket=bucket_name, Key=key)
 
             result = {
@@ -568,7 +352,6 @@ if _aws_credentials_available():
         try:
             s3_client = get_s3_client()
 
-            # First check object size
             head_response = s3_client.head_object(Bucket=bucket_name, Key=key)
             size_bytes = head_response.get("ContentLength", 0)
             max_size_bytes = max_size_mb * 1024 * 1024
@@ -578,11 +361,9 @@ if _aws_credentials_available():
                 logger.error(error_msg)
                 return json.dumps({"error": error_msg})
 
-            # Read object content
             response = s3_client.get_object(Bucket=bucket_name, Key=key)
             content = response["Body"].read()
 
-            # Try to decode as text
             try:
                 text_content = content.decode("utf-8")
             except UnicodeDecodeError:

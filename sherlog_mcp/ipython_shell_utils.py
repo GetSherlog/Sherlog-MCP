@@ -151,15 +151,30 @@ async def execute_python_code(code: str):
     """
     stdout_buffer = io.StringIO()
     stderr_buffer = io.StringIO()
+    
+    # Limit output size to prevent transport issues
+    import os
+    MAX_OUTPUT_SIZE = int(os.getenv('MCP_MAX_OUTPUT_SIZE', '50000'))  # Default 50KB limit per buffer
 
     with (
         contextlib.redirect_stdout(stdout_buffer),
         contextlib.redirect_stderr(stderr_buffer),
     ):
-        result = await run_code_in_shell(code)
+        try:
+            result = await run_code_in_shell(code)
+        except Exception as e:
+            # Handle any execution errors gracefully
+            logger.error(f"Error executing code: {e}")
+            result = None
 
     stdout_value = stdout_buffer.getvalue()
     stderr_value = stderr_buffer.getvalue()
+    
+    # Truncate output if too large
+    if len(stdout_value) > MAX_OUTPUT_SIZE:
+        stdout_value = stdout_value[:MAX_OUTPUT_SIZE] + "\n... (output truncated)"
+    if len(stderr_value) > MAX_OUTPUT_SIZE:
+        stderr_value = stderr_value[:MAX_OUTPUT_SIZE] + "\n... (output truncated)"
 
     execution_details_dict = {}
 

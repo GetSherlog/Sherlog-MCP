@@ -6,7 +6,6 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Supported file extensions and their corresponding languages
 LANGUAGE_EXTENSIONS = {
     ".java": "java",
     ".kt": "kotlin",
@@ -43,23 +42,23 @@ def should_skip_directory(dir_name: str) -> bool:
     skip_dirs = {
         ".git",
         ".svn",
-        ".hg",  # Version control
+        ".hg",
         "node_modules",
         "venv",
         ".venv",
-        "__pycache__",  # Dependencies/cache
+        "__pycache__",
         ".idea",
         ".vscode",
-        ".eclipse",  # IDE files
+        ".eclipse",
         "build",
         "dist",
         "target",
-        "out",  # Build outputs
+        "out",
         ".gradle",
-        ".maven",  # Build tools
+        ".maven",
         "logs",
         "tmp",
-        "temp",  # Temporary files
+        "temp",
     }
     return dir_name in skip_dirs
 
@@ -82,7 +81,6 @@ def load_files(codebase_path: str) -> list[tuple[str, str]]:
 
     try:
         for root, dirs, filenames in os.walk(codebase_path):
-            # Filter out directories to skip
             dirs[:] = [d for d in dirs if not should_skip_directory(d)]
 
             for filename in filenames:

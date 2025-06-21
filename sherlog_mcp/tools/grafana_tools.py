@@ -41,7 +41,6 @@ def _get_grafana_session():
 if _grafana_credentials_available():
     logger.info("Grafana credentials detected - registering Grafana tools")
 
-    # Prometheus Tools
     def _query_prometheus_impl(
         datasource_uid: str,
         query: str,
@@ -99,7 +98,6 @@ if _grafana_credentials_available():
         result = response.json()
         logger.info("Prometheus query completed successfully")
 
-        # Convert result to DataFrame
         rows = []
         if "results" in result:
             for query_result in result["results"].values():
@@ -107,13 +105,12 @@ if _grafana_credentials_available():
                     for frame in query_result["frames"]:
                         if "data" in frame and "values" in frame["data"]:
                             values = frame["data"]["values"]
-                            if len(values) >= 2:  # timestamp and value columns
+                            if len(values) >= 2:
                                 timestamps = values[0] if values[0] else []
                                 metric_values = (
                                     values[1] if len(values) > 1 and values[1] else []
                                 )
 
-                                # Get metric labels from frame schema
                                 labels = {}
                                 if "schema" in frame and "fields" in frame["schema"]:
                                     for field in frame["schema"]["fields"]:
@@ -134,12 +131,10 @@ if _grafana_credentials_available():
                                         "query": query,
                                         "datasource_uid": datasource_uid,
                                     }
-                                    # Add labels as separate columns
                                     row.update(labels)
                                     rows.append(row)
 
         if not rows:
-            # Return empty DataFrame with standard columns if no data
             return pd.DataFrame(
                 columns=["timestamp", "value", "query", "datasource_uid"]
             )
@@ -183,9 +178,8 @@ if _grafana_credentials_available():
                     code += f', "{step}"'
         code += f")\n{save_as}"
 
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     def _list_prometheus_metric_metadata_impl(
         datasource_uid: str, metric: str | None = None
@@ -218,7 +212,6 @@ if _grafana_credentials_available():
         result = response.json()
         logger.info(f"Retrieved metadata for {len(result.get('data', {}))} metrics")
 
-        # Convert metadata to DataFrame
         rows = []
         metadata = result.get("data", {})
         for metric_name, metric_info in metadata.items():
@@ -263,9 +256,8 @@ if _grafana_credentials_available():
         else:
             code = f'{save_as} = list_prometheus_metric_metadata_impl("{datasource_uid}")\n{save_as}'
 
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     def _list_prometheus_metric_names_impl(datasource_uid: str) -> pd.DataFrame:
         """List available metric names from a Prometheus datasource.
@@ -294,7 +286,6 @@ if _grafana_credentials_available():
         metric_names = result.get("data", [])
         logger.info(f"Retrieved {len(metric_names)} metric names")
 
-        # Convert to DataFrame
         df = pd.DataFrame(
             {
                 "metric_name": metric_names,
@@ -323,9 +314,8 @@ if _grafana_credentials_available():
 
         """
         code = f'{save_as} = list_prometheus_metric_names_impl("{datasource_uid}")\n{save_as}'
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     def _list_prometheus_label_names_impl(
         datasource_uid: str, match: str | None = None
@@ -357,7 +347,6 @@ if _grafana_credentials_available():
         label_names = result.get("data", [])
         logger.info(f"Retrieved {len(label_names)} label names")
 
-        # Convert to DataFrame
         df = pd.DataFrame(
             {
                 "label_name": label_names,
@@ -392,9 +381,8 @@ if _grafana_credentials_available():
         else:
             code = f'{save_as} = list_prometheus_label_names_impl("{datasource_uid}")\n{save_as}'
 
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     def _list_prometheus_label_values_impl(
         datasource_uid: str, label: str, match: str | None = None
@@ -431,7 +419,6 @@ if _grafana_credentials_available():
         label_values = result.get("data", [])
         logger.info(f"Retrieved {len(label_values)} values for label '{label}'")
 
-        # Convert to DataFrame
         df = pd.DataFrame(
             {
                 "label_name": [label] * len(label_values),
@@ -470,11 +457,9 @@ if _grafana_credentials_available():
         else:
             code = f'{save_as} = list_prometheus_label_values_impl("{datasource_uid}", "{label}")\n{save_as}'
 
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
-    # Loki Tools
     def _query_loki_logs_impl(
         datasource_uid: str,
         query: str,
@@ -528,7 +513,6 @@ if _grafana_credentials_available():
         result = response.json()
         logger.info("Loki query completed successfully")
 
-        # Convert result to DataFrame
         rows = []
         if "results" in result:
             for query_result in result["results"].values():
@@ -536,13 +520,12 @@ if _grafana_credentials_available():
                     for frame in query_result["frames"]:
                         if "data" in frame and "values" in frame["data"]:
                             values = frame["data"]["values"]
-                            if len(values) >= 2:  # timestamp and log line columns
+                            if len(values) >= 2:
                                 timestamps = values[0] if values[0] else []
                                 log_lines = (
                                     values[1] if len(values) > 1 and values[1] else []
                                 )
 
-                                # Get labels from frame schema
                                 labels = {}
                                 if "schema" in frame and "fields" in frame["schema"]:
                                     for field in frame["schema"]["fields"]:
@@ -564,12 +547,10 @@ if _grafana_credentials_available():
                                         "query_type": query_type,
                                         "datasource_uid": datasource_uid,
                                     }
-                                    # Add labels as separate columns
                                     row.update(labels)
                                     rows.append(row)
 
         if not rows:
-            # Return empty DataFrame with standard columns if no data
             return pd.DataFrame(
                 columns=[
                     "timestamp",
@@ -623,9 +604,8 @@ if _grafana_credentials_available():
                         code += f', "{direction}"'
         code += f")\n{save_as}"
 
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     def _list_loki_label_names_impl(
         datasource_uid: str, start: str | None = None, end: str | None = None
@@ -660,7 +640,6 @@ if _grafana_credentials_available():
         label_names = result.get("data", [])
         logger.info(f"Retrieved {len(label_names)} label names from Loki")
 
-        # Convert to DataFrame
         df = pd.DataFrame(
             {
                 "label_name": label_names,
@@ -705,9 +684,8 @@ if _grafana_credentials_available():
                 code += f', "{end}"'
         code += f")\n{save_as}"
 
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     def _list_loki_label_values_impl(
         datasource_uid: str,
@@ -756,7 +734,6 @@ if _grafana_credentials_available():
             f"Retrieved {len(label_values)} values for label '{label}' from Loki"
         )
 
-        # Convert to DataFrame
         df = pd.DataFrame(
             {
                 "label_name": [label] * len(label_values),
@@ -811,9 +788,8 @@ if _grafana_credentials_available():
                     code += f', "{query}"'
         code += f")\n{save_as}"
 
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     def _query_loki_stats_impl(
         datasource_uid: str,
@@ -849,9 +825,7 @@ if _grafana_credentials_available():
         response.raise_for_status()
 
         result = response.json()
-        logger.info("Retrieved Loki stats successfully")
 
-        # Convert stats to DataFrame
         data = result.get("data", {})
         stats_data = {
             "query": [query],
@@ -860,7 +834,6 @@ if _grafana_credentials_available():
             "end_time": [end] if end else [None],
         }
 
-        # Add all stats fields to the DataFrame
         for key, value in data.items():
             stats_data[key] = [value]
 
@@ -897,9 +870,8 @@ if _grafana_credentials_available():
                 code += f', "{end}"'
         code += f")\n{save_as}"
 
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 else:
     logger.info(
         "Grafana credentials not detected - Grafana tools will not be registered"

@@ -58,7 +58,7 @@ class CodeImplementationResult:
         self.line_end = line_end
         self.doc_comment = doc_comment
         self.class_name = class_name
-        self.result_type = result_type  # "method" or "class"
+        self.result_type = result_type
 
     def to_dict(self) -> dict:
         """Convert to dictionary for DataFrame compatibility."""
@@ -104,7 +104,6 @@ class ExactCodeRetriever:
         results = []
 
         for file_path, language in self.file_list:
-            # Only process supported languages
             if not self._is_supported_language(language):
                 continue
 
@@ -123,11 +122,9 @@ class ExactCodeRetriever:
 
                 for method_node in method_nodes:
                     if method_node.name == method_name:
-                        # If class_name is specified, filter by it
                         if class_name and method_node.class_name != class_name:
                             continue
 
-                        # Get line numbers for the method
                         lines = code.split("\n")
                         start_line = method_node.node.start_point[0] + 1
                         end_line = method_node.node.end_point[0] + 1
@@ -165,7 +162,6 @@ class ExactCodeRetriever:
         results = []
 
         for file_path, language in self.file_list:
-            # Only process supported languages
             if not self._is_supported_language(language):
                 continue
 
@@ -184,7 +180,6 @@ class ExactCodeRetriever:
 
                 for class_node in class_nodes:
                     if class_node.name == class_name:
-                        # Get line numbers for the class
                         start_line = class_node.node.start_point[0] + 1
                         end_line = class_node.node.end_point[0] + 1
 
@@ -194,7 +189,7 @@ class ExactCodeRetriever:
                             file_path=file_path,
                             line_start=start_line,
                             line_end=end_line,
-                            doc_comment="",  # Classes don't have doc comments in our current structure
+                            doc_comment="",
                             class_name=class_node.name,
                             result_type="class",
                         )
@@ -216,7 +211,6 @@ class ExactCodeRetriever:
         methods = []
 
         for file_path, language in self.file_list:
-            # Only process supported languages
             if not self._is_supported_language(language):
                 continue
 
@@ -254,7 +248,6 @@ class ExactCodeRetriever:
         classes = []
 
         for file_path, language in self.file_list:
-            # Only process supported languages
             if not self._is_supported_language(language):
                 continue
 
@@ -279,9 +272,6 @@ class ExactCodeRetriever:
                 continue
 
         return classes
-
-
-# Implementation functions that will be pushed to the shell
 
 
 def _find_method_implementation_impl(
@@ -328,7 +318,6 @@ def _find_method_implementation_impl(
             ]
         )
 
-    # Convert results to DataFrame
     data = [result.to_dict() for result in results]
     df = pd.DataFrame(data)
 
@@ -379,7 +368,6 @@ def _find_class_implementation_impl(
             ]
         )
 
-    # Convert results to DataFrame
     data = [result.to_dict() for result in results]
     df = pd.DataFrame(data)
 
@@ -417,7 +405,6 @@ def _list_all_methods_impl(
     if not methods:
         return pd.DataFrame(columns=["method_name", "class_name", "file_path"])
 
-    # Convert to DataFrame
     df = pd.DataFrame(methods, columns=["method_name", "class_name", "file_path"])
 
     logger.info(f"Found {len(methods)} methods in codebase")
@@ -454,10 +441,7 @@ def _list_all_classes_impl(
     if not classes:
         return pd.DataFrame(columns=["class_name", "file_path"])
 
-    # Convert to DataFrame
     df = pd.DataFrame(classes, columns=["class_name", "file_path"])
-
-    logger.info(f"Found {len(classes)} classes in codebase")
     return df
 
 
@@ -495,7 +479,6 @@ def _get_codebase_stats_impl(
             columns=["language", "file_count", "codebase_path", "supported_languages"]
         )
 
-    # Convert to DataFrame
     data = []
     for language, count in stats.items():
         data.append(
@@ -515,7 +498,6 @@ def _get_codebase_stats_impl(
     return df
 
 
-# Push implementation functions to shell
 _SHELL.push(
     {
         "_find_method_implementation_impl": _find_method_implementation_impl,
@@ -526,11 +508,7 @@ _SHELL.push(
     }
 )
 
-# Conditional tool registration based on codebase path availability
 if _codebase_path_available():
-    logger.info("Codebase path detected - registering code retrieval tools")
-
-    # MCP Tool implementations
 
     @app.tool()
     async def find_method_implementation(
@@ -538,7 +516,7 @@ if _codebase_path_available():
         class_name: str | None = None,
         *,
         save_as: str = "method_results",
-    ) -> list[dict] | None:
+    ) -> pd.DataFrame | None:
         """Find method implementation(s) by exact name in configured programming languages.
 
         Args:
@@ -547,7 +525,7 @@ if _codebase_path_available():
             save_as: Variable name to save results in IPython shell
 
         Returns:
-            list[dict]: Method implementations found as list of dictionaries
+            pd.DataFrame: Method implementations found as a DataFrame
 
         """
         if class_name:
@@ -556,15 +534,12 @@ if _codebase_path_available():
             code = f'{save_as} = _find_method_implementation_impl("{method_name}")\n{save_as}'
 
         execution_result = await run_code_in_shell(code)
-        df = execution_result.result if execution_result else None
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
-        return None
+        return execution_result.result if execution_result else None
 
     @app.tool()
     async def find_class_implementation(
         class_name: str, *, save_as: str = "class_results"
-    ) -> list[dict] | None:
+    ) -> pd.DataFrame | None:
         """Find class implementation(s) by exact name in configured programming languages.
 
         Args:
@@ -572,75 +547,63 @@ if _codebase_path_available():
             save_as: Variable name to save results in IPython shell
 
         Returns:
-            list of dictionaries: Class implementations found
+            pd.DataFrame: Class implementations found
 
         """
         code = f'{save_as} = _find_class_implementation_impl("{class_name}")\n{save_as}'
 
         execution_result = await run_code_in_shell(code)
-        df = execution_result.result if execution_result else None
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
-        return None
+        return execution_result.result if execution_result else None
 
     @app.tool()
-    async def list_all_methods(*, save_as: str = "all_methods") -> list[dict] | None:
+    async def list_all_methods(*, save_as: str = "all_methods") -> pd.DataFrame | None:
         """List all methods in the configured programming languages.
 
         Args:
             save_as: Variable name to save results in IPython shell
 
         Returns:
-            list of dictionaries: All methods with their class names and file paths
+            pd.DataFrame: All methods with their class names and file paths
 
         """
         code = f"{save_as} = _list_all_methods_impl()\n{save_as}"
 
         execution_result = await run_code_in_shell(code)
-        df = execution_result.result if execution_result else None
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
-        return None
+        return execution_result.result if execution_result else None
 
     @app.tool()
-    async def list_all_classes(*, save_as: str = "all_classes") -> list[dict] | None:
+    async def list_all_classes(*, save_as: str = "all_classes") -> pd.DataFrame | None:
         """List all classes in the configured programming languages.
 
         Args:
             save_as: Variable name to save results in IPython shell
 
         Returns:
-            list of dictionaries: All classes with their file paths
+            pd.DataFrame: All classes with their file paths
 
         """
         code = f"{save_as} = _list_all_classes_impl()\n{save_as}"
 
         execution_result = await run_code_in_shell(code)
-        df = execution_result.result if execution_result else None
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
-        return None
+        return execution_result.result if execution_result else None
 
     @app.tool()
     async def get_codebase_stats(
         *, save_as: str = "codebase_stats"
-    ) -> list[dict] | None:
+    ) -> pd.DataFrame | None:
         """Get statistics about the configured codebase.
 
         Args:
             save_as: Variable name to save results in IPython shell
 
         Returns:
-            list of dictionaries: Statistics about file types and counts in the codebase
+            pd.DataFrame: Statistics about file types and counts in the codebase
 
         """
         code = f"{save_as} = _get_codebase_stats_impl()\n{save_as}"
 
         execution_result = await run_code_in_shell(code)
-        df = execution_result.result if execution_result else None
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
-        return None
+        return execution_result.result if execution_result else None
 
     @app.tool()
     async def configure_supported_languages(
@@ -666,7 +629,6 @@ if _codebase_path_available():
             "rust",
         }
 
-        # Validate languages
         invalid_languages = []
         valid_requested = []
 

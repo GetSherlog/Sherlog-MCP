@@ -20,8 +20,6 @@ from sherlog_mcp.session import (
     logger,
 )
 
-# ---------------------------------------------------------------------------
-
 
 def _cluster_log_features_impl(
     feature_vector: Any,
@@ -109,13 +107,11 @@ def _cluster_log_features_impl(
 
     clustering_params = clustering_params or {}
     if algo_name == "kmeans":
-        # Instantiate KMeansParams first, then set attributes
         algo_params_obj = KMeansParams()
         algo_params_obj.n_clusters = n_clusters
         algo_params_obj.algorithm = (
-            "lloyd"  # Default or from clustering_params if specified
+            "lloyd"
         )
-        # Apply other params from clustering_params, potentially overriding 'algorithm' if present
         for key, value in clustering_params.items():
             if hasattr(algo_params_obj, key):
                 setattr(algo_params_obj, key, value)
@@ -135,7 +131,7 @@ def _cluster_log_features_impl(
     ids = clusterer.predict(df)
     series = pd.Series(
         ids.astype(str), name="cluster_id", index=df.index
-    )  # Ensure index alignment
+    )
 
     return series
 

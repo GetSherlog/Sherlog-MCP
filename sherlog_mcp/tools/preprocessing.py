@@ -33,7 +33,7 @@ def _ensure_list_of_strings(data: Any, logger_ref) -> list[str]:
             res = data.iloc[:, 0].astype(str).tolist()
     elif hasattr(data, "__iter__") and not isinstance(
         data, (str, bytes, dict)
-    ):  # Exclude single strings, bytes, dicts from iteration
+    ):
         try:
             res = list(map(str, data))
         except Exception as e_map_str:

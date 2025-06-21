@@ -7,6 +7,7 @@ from sherlog_mcp.session import (
     app,
     logger,
 )
+from sherlog_mcp.tools.preprocessing import _parse_log_data_impl
 
 
 def _docker_available() -> bool:
@@ -80,15 +81,13 @@ if _docker_available():
 
         Returns:
             pd.DataFrame: A Pandas DataFrame containing details of running containers
-                          (ID, Name, Image, Status). Returns an empty DataFrame if
-                          no containers are found or if an error occurs (with a logged error).
+                          (ID, Name, Image, Status). Returns `None` if no containers
+                          are found or if an error occurs (with a logged error).
 
         """
         code = f"{save_as} = list_containers_impl()\n" + f"{save_as}"
         execution_result = await run_code_in_shell(code)
-        df = execution_result.result if execution_result else None
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        return execution_result.result if execution_result else None
 
     def _get_container_logs_impl(container_id: str, tail: str | int = "all") -> str:
         client = docker.from_env()
@@ -127,6 +126,79 @@ if _docker_available():
         code = (
             f'{save_as} = get_container_logs_impl("{container_id}", "{tail}")\n'
             + f"{save_as}"
+        )
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
+
+    def _get_container_logs_structured_impl(
+        container_id: str, tail: str | int = "all"
+    ) -> pd.DataFrame | None:
+        """Fetch Docker logs and parse them into structured templates using DRain.
+
+        The resulting DataFrame has at minimum the columns:
+
+        • ``timestamp`` – as ISO-8601 string (extracted from each log line if present)
+        • ``message`` – raw log message text after the timestamp
+        • ``template`` – DRain log template produced by :pyfunc:`_parse_log_data_impl`
+        """
+        raw_text = _get_container_logs_impl(container_id, tail)
+        if raw_text is None:
+            return None  # pragma: no cover
+
+        rows: list[dict[str, str]] = []
+        messages: list[str] = []
+
+        for line in raw_text.splitlines():
+            if not line.strip():
+                continue
+            if " " in line:
+                ts, msg = line.split(" ", 1)
+            else:
+                ts, msg = "", line
+            rows.append({"timestamp": ts, "message": msg})
+            messages.append(msg)
+
+        if not rows:
+            return pd.DataFrame()
+
+        try:
+            templates_series = _parse_log_data_impl(messages, parsing_algorithm="drain")
+        except Exception as exc:
+            logger.warning("Drain parsing failed: %s: %s", type(exc).__name__, exc)
+            templates_series = pd.Series([None] * len(messages), name="template")
+
+        df = pd.DataFrame(rows)
+        df["template"] = templates_series.values
+        return to_pandas(df)
+
+    _SHELL.push({"_get_container_logs_structured_impl": _get_container_logs_structured_impl})
+
+    @app.tool()
+    async def get_container_logs_structured(
+        container_id: str,
+        tail: str | int = "all",
+        *,
+        save_as: str,
+    ) -> pd.DataFrame | None:
+        """Retrieve Docker logs and return a DRain-parsed structured DataFrame.
+
+        This is a convenience wrapper that chains :pyfunc:`get_container_logs` with
+        LogAI's DRain parser so the caller gets structured output in one step.
+
+        Args:
+            container_id: The ID or name of the container.
+            tail: Number of lines from the end ("all" for entire logs).
+            save_as: Variable name to store the resulting DataFrame in the IPython shell.
+
+        Returns
+        -------
+        pandas.DataFrame | None
+            DataFrame with columns ``timestamp``, ``message``, ``template``.  ``None``
+            if log retrieval fails or no logs are available.
+        """
+        code = (
+            f"{save_as} = _get_container_logs_structured_impl(\"{container_id}\", \"{tail}\")\n"
+            f"{save_as}"
         )
         execution_result = await run_code_in_shell(code)
         return execution_result.result if execution_result else None
