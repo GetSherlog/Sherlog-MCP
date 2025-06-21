@@ -54,16 +54,13 @@ def _list_containers_impl() -> pd.DataFrame | None:
             }
         )
     logger.info(f"Found {len(container_list)} containers.")
-    # Use smart DataFrame creation for better performance with polars when available
     container_data_df = smart_create_dataframe(container_list, prefer_polars=True)
-    # Convert to pandas for compatibility with existing code
     return to_pandas(container_data_df)
 
 
 _SHELL.push({"list_containers_impl": _list_containers_impl})
 
 
-# Conditional tool registration based on Docker availability
 if _docker_available():
     logger.info("Docker daemon detected - registering Docker tools")
 

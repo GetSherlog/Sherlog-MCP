@@ -34,14 +34,39 @@ def _enhanced_to_json(value, *, fallback=None, **kwargs):
     def _convert_scientific_objects(obj):
         """Convert scientific objects to JSON-serializable formats."""
         if isinstance(obj, pd.DataFrame):
-            return json.loads(obj.to_json(orient="records", date_format="iso"))
+            # Handle NaN and infinity values before JSON conversion
+            # Replace NaN with None and infinity with string representation
+            df_clean = obj.replace([np.inf, -np.inf], ['Infinity', '-Infinity'])
+            df_clean = df_clean.where(pd.notnull(df_clean), None)
+            try:
+                return json.loads(df_clean.to_json(orient="records", date_format="iso"))
+            except (ValueError, TypeError):
+                # Fallback: convert to dict records directly
+                return df_clean.to_dict(orient="records")
         elif isinstance(obj, pd.Series):
-            return json.loads(obj.to_json(date_format="iso"))
+            # Handle NaN and infinity values in Series
+            series_clean = obj.replace([np.inf, -np.inf], ['Infinity', '-Infinity'])
+            series_clean = series_clean.where(pd.notnull(series_clean), None)
+            try:
+                return json.loads(series_clean.to_json(date_format="iso"))
+            except (ValueError, TypeError):
+                # Fallback: convert to dict directly
+                return series_clean.to_dict()
         elif isinstance(obj, np.ndarray):
-            return obj.tolist()
+            # Convert numpy array, handling special values
+            return np.where(np.isnan(obj), None, 
+                          np.where(np.isinf(obj), 
+                                 np.where(obj > 0, 'Infinity', '-Infinity'), 
+                                 obj)).tolist() if obj.dtype.kind in 'fc' else obj.tolist()
         elif isinstance(obj, (np.integer, np.floating)):
+            # Handle numpy scalar types
+            if np.isnan(obj):
+                return None
+            elif np.isinf(obj):
+                return 'Infinity' if obj > 0 else '-Infinity'
             return obj.item()
         elif isinstance(obj, pl.DataFrame):
+            # Polars DataFrames handle JSON conversion better
             return obj.to_dicts()
 
         return obj
@@ -50,8 +75,15 @@ def _enhanced_to_json(value, *, fallback=None, **kwargs):
         converted_value = _convert_scientific_objects(value)
         if converted_value is not value:
             return _original_to_json(converted_value, fallback=fallback, **kwargs)
-    except Exception:
-        pass
+    except Exception as e:
+        # Log the error for debugging
+        logger.debug(f"Error in _enhanced_to_json: {e}")
+        # If conversion fails, try the fallback if provided
+        if fallback is not None:
+            try:
+                return _original_to_json(fallback(value), **kwargs)
+            except Exception:
+                pass
 
     return _original_to_json(value, fallback=fallback, **kwargs)
 

@@ -684,7 +684,6 @@ if _codebase_path_available():
             return "Error: No valid languages specified."
 
         try:
-            # Save to shell variable
             config_line = f"{save_as} = {repr(valid_requested)}"
             print_line = f"print('Configured ' + str(len({save_as})) + ' languages: ' + ', '.join({save_as}))"
             code = config_line + "\n" + print_line

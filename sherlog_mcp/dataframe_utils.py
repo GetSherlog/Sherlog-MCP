@@ -285,7 +285,14 @@ def to_json_serializable(
     import json
 
     if isinstance(df, pd.DataFrame):
-        return json.loads(df.to_json(orient="records", date_format="iso"))
+        # Handle NaN and infinity values before JSON conversion
+        df_clean = df.replace([np.inf, -np.inf], ['Infinity', '-Infinity'])
+        df_clean = df_clean.where(pd.notnull(df_clean), None)
+        try:
+            return json.loads(df_clean.to_json(orient="records", date_format="iso"))
+        except (ValueError, TypeError):
+            # Fallback: convert to dict records directly
+            return df_clean.to_dict(orient="records")
     elif isinstance(df, pl.DataFrame):
         return df.to_dicts()
     else:

@@ -7,15 +7,14 @@ from IPython.core.completer import IPCompleter
 
 from sherlog_mcp.session import app, logger
 
+import pandas as pd
+import polars as pl
+
 _SHELL: InteractiveShell = InteractiveShell.instance()
 _SHELL.reset()
 
-_SHELL.ast_node_interactivity = "none"
-_SHELL.colors = "NoColor"
-
 _SHELL.run_line_magic("load_ext", "autoreload")
 _SHELL.run_line_magic("autoreload", "2")
-_SHELL.run_line_magic("xmode", "Minimal")
 
 _SHELL.Completer = IPCompleter(shell=_SHELL, use_jedi=False)
 
@@ -42,26 +41,19 @@ class SmartMemoryManager:
         import os
         self.execution_count = 0
         self.last_reset_count = 0
-        # Configurable via environment variable
-        self.reset_threshold = int(os.getenv('MCP_AUTO_RESET_THRESHOLD', '50'))
+        self.reset_threshold = int(os.getenv('MCP_AUTO_RESET_THRESHOLD', '200'))
         self.auto_reset_enabled = os.getenv('MCP_AUTO_RESET_ENABLED', 'true').lower() == 'true'
         
     def should_reset(self) -> bool:
         """Check if we should reset based on execution count and presence of DataFrames."""
         self.execution_count += 1
         
-        # If auto-reset is disabled, never reset
         if not self.auto_reset_enabled:
             return False
         
-        # Calculate executions since last reset
         executions_since_reset = self.execution_count - self.last_reset_count
         
         if executions_since_reset >= self.reset_threshold:
-            # Quick check - do we have DataFrames that indicate memory usage?
-            import pandas as pd
-            import polars as pl
-            
             has_dataframes = any(
                 isinstance(obj, (pd.DataFrame, pl.DataFrame)) 
                 for obj in _SHELL.user_ns.values()
@@ -77,44 +69,33 @@ class SmartMemoryManager:
         """Smart reset - preserves imports and recent DataFrames."""
         import pandas as pd
         import polars as pl
-        
-        # Find the most recent DataFrames (likely still needed)
         recent_dfs = {}
         for name, obj in _SHELL.user_ns.items():
             if isinstance(obj, (pd.DataFrame, pl.DataFrame)) and not name.startswith('_'):
-                # Keep up to 3 most recent DataFrames
                 if len(recent_dfs) < 3:
                     recent_dfs[name] = obj
         
-        # Keep imports
         imports = {k: v for k, v in _SHELL.user_ns.items() 
                    if hasattr(v, '__module__') and not k.startswith('_')}
         
-        # Reset shell
         _SHELL.reset()
         
-        # Restore imports and recent data
         _SHELL.user_ns.update(imports)
         _SHELL.user_ns.update(recent_dfs)
         
-        # Re-import common libraries
         _SHELL.run_cell("import pandas as pd\nimport numpy as np\nimport polars as pl")
-        
-        logger.info(f"Auto-reset session after {self.reset_threshold} executions, kept {len(recent_dfs)} recent DataFrames")
 
 
 _SMART_MANAGER = SmartMemoryManager()
 
 
 async def run_code_in_shell(code: str):
-    # Check if we should reset before execution
+    """Execute *code* asynchronously in the shared IPython shell and return the ExecutionResult."""
     if _SMART_MANAGER.should_reset():
         _SMART_MANAGER.reset()
-    
+
     execution_result = await _SHELL.run_cell_async(code)
-    
-    # Don't raise exceptions here - let the caller handle them
-    # This prevents double-response issues in MCP
+
     return execution_result
 
 
@@ -183,9 +164,10 @@ async def execute_python_code(code: str):
     execution_details_dict = {}
 
     if result is not None:
-        # Only add result if there was no error
         if not result.error_before_exec and not result.error_in_exec:
-            execution_details_dict["result"] = result.result
+            # Import the conversion function to handle DataFrames properly
+            from sherlog_mcp.dataframe_utils import to_json_serializable
+            execution_details_dict["result"] = to_json_serializable(result.result)
 
         if result.error_before_exec:
             execution_details_dict["error_before_exec"] = str(result.error_before_exec)

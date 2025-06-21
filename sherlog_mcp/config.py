@@ -80,18 +80,6 @@ class Settings(BaseSettings):  # type: ignore[misc]
         alias="GRAFANA_API_KEY",
     )
 
-    sentry_auth_token: str | None = Field(
-        default=None,
-        description="Authentication token for Sentry API access.",
-        alias="SENTRY_AUTH_TOKEN",
-    )
-
-    sentry_host: str | None = Field(
-        default="https://sentry.io",
-        description="Base URL for the Sentry instance (e.g., https://sentry.io or https://your-domain.sentry.io)",
-        alias="SENTRY_HOST",
-    )
-
     aws_access_key_id: str | None = Field(
         default=None,
         description="AWS Access Key ID for S3 authentication.",
@@ -178,7 +166,6 @@ class Settings(BaseSettings):  # type: ignore[misc]
             else:
                 raise ValueError("EXTERNAL_MCPS_JSON must be a JSON object")
         except Exception as e:
-            print(f"Error parsing EXTERNAL_MCPS_JSON: {e}")
             return {}
 
     model_config = {

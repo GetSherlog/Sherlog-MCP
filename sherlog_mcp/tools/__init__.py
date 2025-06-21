@@ -18,7 +18,6 @@ from . import (
     mixpanel_tools,
     preprocessing,
     s3_tools,
-    sentry_tools,
     vectorization,
 )
 
@@ -36,7 +35,6 @@ __all__ = [
     "s3_tools",
     "cloudwatch_tools",
     "code_retrieval",
-    "sentry_tools",
     "mixpanel_tools",
 ]
 
@@ -109,20 +107,6 @@ try:
         get_codebase_stats,
         list_all_classes,
         list_all_methods,
-    )
-except ImportError:
-    pass
-
-try:
-    from .sentry_tools import (
-        create_project,
-        get_sentry_event,
-        get_sentry_issue,
-        list_issue_events,
-        list_organization_replays,
-        list_project_issues,
-        list_projects,
-        resolve_short_id,
     )
 except ImportError:
     pass

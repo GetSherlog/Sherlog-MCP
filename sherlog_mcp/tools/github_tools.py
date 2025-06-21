@@ -16,6 +16,9 @@ from sherlog_mcp.session import (
     logger,
 )
 
+from datetime import timedelta
+import dateutil.parser
+
 
 def _github_credentials_available() -> bool:
     """Return True if GitHub PAT token is available."""
@@ -26,7 +29,6 @@ def _github_credentials_available() -> bool:
         return False
 
 
-# Only define tools if GitHub credentials are available
 if _github_credentials_available():
     logger.info("GitHub PAT token detected - registering GitHub tools")
 
@@ -36,7 +38,6 @@ if _github_credentials_available():
         if not settings.github_pat_token:
             raise ValueError("GITHUB_PAT_TOKEN must be set in environment variables")
 
-        # Validate token format
         token = settings.github_pat_token.strip()
         if not (token.startswith("ghp_") or token.startswith("github_pat_")):
             logger.warning(
@@ -53,7 +54,6 @@ if _github_credentials_available():
         )
         return session
 
-    # GitHub Issue Tools
     def _get_issue_impl(owner: str, repo: str, issue_number: int) -> pd.DataFrame:
         """Get details of a specific issue from a GitHub repository.
 
@@ -73,7 +73,6 @@ if _github_credentials_available():
         logger.info(f"Fetching GitHub issue #{issue_number} from {owner}/{repo}")
         response = session.get(url)
 
-        # Enhanced error handling with detailed information
         if not response.ok:
             error_details = {
                 "status_code": response.status_code,
@@ -109,7 +108,6 @@ if _github_credentials_available():
         issue = response.json()
         logger.info(f"Retrieved issue: {issue['title']}")
 
-        # Convert issue to DataFrame
         issue_data = {
             "number": [issue["number"]],
             "title": [issue["title"]],
@@ -149,16 +147,12 @@ if _github_credentials_available():
         try:
             session = _get_github_session()
 
-            # Test 1: Check authenticated user
             logger.info("Testing GitHub API connection...")
             auth_response = session.get("https://api.github.com/user")
-
-            # Test 2: Check rate limits
             rate_response = session.get("https://api.github.com/rate_limit")
 
             results = []
 
-            # Auth test result
             if auth_response.ok:
                 user_data = auth_response.json()
                 results.append(
@@ -185,7 +179,6 @@ if _github_credentials_available():
                     }
                 )
 
-            # Rate limit test result
             if rate_response.ok:
                 rate_data = rate_response.json()
                 core_limit = rate_data.get("resources", {}).get("core", {})
@@ -252,9 +245,8 @@ if _github_credentials_available():
 
         """
         code = f'{save_as} = get_issue_impl("{owner}", "{repo}", {issue_number})\n{save_as}'
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     @app.tool()
     async def test_github_connection(
@@ -270,9 +262,8 @@ if _github_credentials_available():
 
         """
         code = f"{save_as} = test_github_connection_impl()\n{save_as}"
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     def _search_issues_impl(
         owner: str,
@@ -339,10 +330,8 @@ if _github_credentials_available():
                 ]
             )
 
-        # Convert issues to DataFrame
         rows = []
         for issue in issues:
-            # Skip pull requests (GitHub API returns PRs as issues)
             if "pull_request" in issue:
                 continue
 
@@ -420,11 +409,9 @@ if _github_credentials_available():
             code += "None"
         code += f', "{sort}", "{direction}", {per_page}, {page})\n{save_as}'
 
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
-    # GitHub Pull Request Tools
     def _get_pull_request_impl(owner: str, repo: str, pull_number: int) -> pd.DataFrame:
         """Get details of a specific pull request from a GitHub repository.
 
@@ -448,7 +435,6 @@ if _github_credentials_available():
         pr = response.json()
         logger.info(f"Retrieved pull request: {pr['title']}")
 
-        # Convert PR to DataFrame
         pr_data = {
             "number": [pr["number"]],
             "title": [pr["title"]],
@@ -515,9 +501,8 @@ if _github_credentials_available():
 
         """
         code = f'{save_as} = get_pull_request_impl("{owner}", "{repo}", {pull_number})\n{save_as}'
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     def _list_pull_requests_impl(
         owner: str,
@@ -588,7 +573,6 @@ if _github_credentials_available():
                 ]
             )
 
-        # Convert PRs to DataFrame
         rows = []
         for pr in prs:
             row = {
@@ -671,9 +655,8 @@ if _github_credentials_available():
             code += ", None"
         code += f', "{sort}", "{direction}", {per_page}, {page})\n{save_as}'
 
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     def _get_pull_request_files_impl(
         owner: str, repo: str, pull_number: int
@@ -716,7 +699,6 @@ if _github_credentials_available():
                 ]
             )
 
-        # Convert files to DataFrame
         rows = []
         for file in files:
             row = {
@@ -755,9 +737,8 @@ if _github_credentials_available():
 
         """
         code = f'{save_as} = get_pull_request_files_impl("{owner}", "{repo}", {pull_number})\n{save_as}'
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     def _get_pull_request_comments_impl(
         owner: str, repo: str, pull_number: int
@@ -804,7 +785,6 @@ if _github_credentials_available():
                 ]
             )
 
-        # Convert comments to DataFrame
         rows = []
         for comment in comments:
             row = {
@@ -823,7 +803,7 @@ if _github_credentials_available():
 
         return pd.DataFrame(rows)
 
-    _SHELL.push({"get_pull_request_comments_impl": _get_pull_request_comments_impl})
+    _SHELL.push({"_get_pull_request_comments_impl": _get_pull_request_comments_impl})
 
     @app.tool()
     async def get_pull_request_comments(
@@ -842,9 +822,8 @@ if _github_credentials_available():
 
         """
         code = f'{save_as} = get_pull_request_comments_impl("{owner}", "{repo}", {pull_number})\n{save_as}'
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     def _get_pull_request_reviews_impl(
         owner: str, repo: str, pull_number: int
@@ -887,7 +866,6 @@ if _github_credentials_available():
                 ]
             )
 
-        # Convert reviews to DataFrame
         rows = []
         for review in reviews:
             row = {
@@ -925,9 +903,8 @@ if _github_credentials_available():
 
         """
         code = f'{save_as} = get_pull_request_reviews_impl("{owner}", "{repo}", {pull_number})\n{save_as}'
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     def _list_commits_impl(
         owner: str,
@@ -997,7 +974,6 @@ if _github_credentials_available():
                 ]
             )
 
-        # Convert commits to DataFrame
         rows = []
         for commit in commits:
             commit_data = commit["commit"]
@@ -1075,9 +1051,8 @@ if _github_credentials_available():
             code += ", None"
         code += f", {per_page}, {page})\n{save_as}"
 
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     def _get_commit_details_impl(
         owner: str, repo: str, commit_sha: str
@@ -1104,7 +1079,6 @@ if _github_credentials_available():
         commit = response.json()
         logger.info(f"Retrieved commit: {commit['commit']['message'][:50]}...")
 
-        # Convert commit to DataFrame
         commit_data = commit["commit"]
         stats = commit.get("stats", {})
 
@@ -1150,13 +1124,9 @@ if _github_credentials_available():
             pd.DataFrame: Commits around the issue timeframe
 
         """
-        from datetime import timedelta
-
-        import dateutil.parser
 
         session = _get_github_session()
 
-        # First get the issue to find its creation date
         issue_url = f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}"
         issue_response = session.get(issue_url)
         issue_response.raise_for_status()
@@ -1174,7 +1144,6 @@ if _github_credentials_available():
         all_commits = []
 
         if file_paths:
-            # Analyze commits for each specific file path
             for file_path in file_paths:
                 commits_url = f"https://api.github.com/repos/{owner}/{repo}/commits"
                 params = {
@@ -1212,7 +1181,6 @@ if _github_credentials_available():
                         }
                     )
         else:
-            # Analyze all commits in the timeframe
             commits_url = f"https://api.github.com/repos/{owner}/{repo}/commits"
             params = {
                 "since": since_date.isoformat(),
@@ -1292,9 +1260,8 @@ if _github_credentials_available():
 
         """
         code = f'{save_as} = get_commit_details_impl("{owner}", "{repo}", "{commit_sha}")\n{save_as}'
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
     @app.tool()
     async def analyze_file_commits_around_issue(
@@ -1333,9 +1300,8 @@ if _github_credentials_available():
             code += ", None"
         code += f", {days_before}, {days_after})\n{save_as}"
 
-        df = await run_code_in_shell(code)
-        if isinstance(df, pd.DataFrame):
-            return df.to_dict("records")
+        execution_result = await run_code_in_shell(code)
+        return execution_result.result if execution_result else None
 
 else:
     logger.info("GitHub PAT token not detected - GitHub tools will not be registered")

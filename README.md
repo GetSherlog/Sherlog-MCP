@@ -32,7 +32,7 @@ Think of it as giving Claude a persistent Python notebook that never forgets, wh
 
 ### 📈 Built-in Analytics
 - **Log Analysis**: Powered by Salesforce's LogAI - anomaly detection, clustering, parsing
-- **Data Sources**: S3, CloudWatch, local files, GitHub, Grafana, Sentry, and more
+- **Data Sources**: S3, CloudWatch, local files, GitHub, Grafana, and more
 - **Processing Tools**: Feature extraction, vectorization, preprocessing pipelines
 
 ## Installation
@@ -248,7 +248,6 @@ Our native tools are designed to work seamlessly with the DataFrame-centric arch
 - **AWS CloudWatch**: `cloudwatch_fetch_logs`, `cloudwatch_get_metrics`
 - **GitHub**: `github_fetch_issues`, `github_fetch_pull_requests`, `github_fetch_commits`
 - **Grafana**: `grafana_query_prometheus`, `grafana_query_loki`
-- **Sentry**: `sentry_fetch_issues`, `sentry_fetch_events`
 - **Mixpanel**: `mixpanel_query_jql`, `mixpanel_get_events`
 
 #### Log Analysis (Powered by LogAI)

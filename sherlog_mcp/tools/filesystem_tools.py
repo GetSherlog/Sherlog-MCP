@@ -23,7 +23,6 @@ from sherlog_mcp.dataframe_utils import read_csv_smart, to_pandas
 from sherlog_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
 from sherlog_mcp.session import app, logger
 
-# Initialize ALLOWED_DIRECTORIES from environment variable
 ALLOWED_DIRECTORIES: list[str] = []
 _allowed_dirs_env = os.environ.get("ALLOWED_DIRECTORIES", "")
 if _allowed_dirs_env:
@@ -89,6 +88,14 @@ async def validate_path(
         )
 
     expanded_path = expand_home(requested_path)
+    
+    if not os.path.isabs(expanded_path) and expanded_path != "":
+        if ALLOWED_DIRECTORIES:
+            if expanded_path == ".":
+                expanded_path = ALLOWED_DIRECTORIES[0]
+            else:
+                expanded_path = os.path.join(ALLOWED_DIRECTORIES[0], expanded_path)
+    
     absolute_path_str = os.path.abspath(expanded_path)
     normalized_requested = normalize_path(absolute_path_str)
 
@@ -217,10 +224,6 @@ async def _build_tree_recursive(
 
 
 if _filesystem_available():
-    logger.info(
-        f"ALLOWED_DIRECTORIES configured ({len(ALLOWED_DIRECTORIES)} directories) - registering filesystem tools"
-    )
-
     async def _read_file_impl(file_path: str) -> pd.DataFrame:
         valid = await validate_path(file_path)
         df = read_csv_smart(str(valid))
@@ -347,7 +350,7 @@ if _filesystem_available():
                 "permissions_octal": oct(stat.S_IMODE(stats.st_mode))[-3:],
                 "is_symlink": valid_path.is_symlink(),
                 "absolute_path": str(valid_path.resolve()),
-                "symlink_target": None,  # Initialize symlink_target
+                "symlink_target": None,
             }
             if info_dict["is_symlink"]:
                 try:
@@ -367,8 +370,9 @@ if _filesystem_available():
         normalized_allowed_dirs = [
             normalize_path(expand_home(d)) for d in ALLOWED_DIRECTORIES
         ]
-
-        return pd.DataFrame(normalized_allowed_dirs, columns=["allowed_directory_path"])
+        
+        result_df = pd.DataFrame(normalized_allowed_dirs, columns=["allowed_directory_path"])
+        return result_df
 
     _SHELL.push(
         {
@@ -406,7 +410,7 @@ if _filesystem_available():
             A Pandas DataFrame with columns: 'name', 'type' ('file' or 'directory'), 'path'.
 
         """
-        code = f'{save_as} = await _list_directory_impl("{dir_path}")'
+        code = f'{save_as} = await _list_directory_impl("{dir_path}")\n{save_as}'
         execution_result = await run_code_in_shell(code)
         return execution_result.result if execution_result else None
 
@@ -423,7 +427,7 @@ if _filesystem_available():
             and 'children' for directories.
 
         """
-        code = f'{save_as} = await _directory_tree_impl("{path}")'
+        code = f'{save_as} = await _directory_tree_impl("{path}")\n{save_as}'
         execution_result = await run_code_in_shell(code)
         return execution_result.result if execution_result else None
 
@@ -445,7 +449,7 @@ if _filesystem_available():
             Returns an empty DataFrame if no matches are found.
 
         """
-        code = f'{save_as} = await _search_files_impl("{path}", "{pattern}", "{exclude_patterns}", "{recursive}")'
+        code = f'{save_as} = await _search_files_impl("{path}", "{pattern}", "{exclude_patterns}", "{recursive}")\n{save_as}'
         execution_result = await run_code_in_shell(code)
         return execution_result.result if execution_result else None
 
@@ -463,7 +467,7 @@ if _filesystem_available():
             'is_symlink', 'absolute_path', and 'symlink_target' (if applicable).
 
         """
-        code = f'{save_as} = await _get_file_info_impl("{path}")'
+        code = f'{save_as} = await _get_file_info_impl("{path}")\n{save_as}'
         execution_result = await run_code_in_shell(code)
         return execution_result.result if execution_result else None
 
@@ -478,7 +482,8 @@ if _filesystem_available():
             A Pandas DataFrame with a single column 'allowed_directory_path'.
 
         """
-        execution_result = await run_code_in_shell("_list_allowed_directories_impl()")
+        code = "_mcp_allowed_dirs_df = _list_allowed_directories_impl()\n_mcp_allowed_dirs_df"
+        execution_result = await run_code_in_shell(code)
         return execution_result.result if execution_result else None
 
     @app.tool()
@@ -509,13 +514,10 @@ if _filesystem_available():
 
         Examples
         --------
-        # Peek at the first 5 lines of 'data.csv'
         >>> peek_file(file_path="data.csv", n_lines=5)
-        ['header1,header2,header3', 'val1,val2,val3', ...] # Example output
+        ['header1,header2,header3', 'val1,val2,val3', ...]
 
-        # Peek at a file with fewer than n_lines
         >>> peek_file(file_path="short_file.txt", n_lines=20)
-        # If short_file.txt has only 3 lines, it returns those 3 lines.
 
         See Also
         --------
