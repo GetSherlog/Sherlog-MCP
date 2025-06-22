@@ -143,7 +143,33 @@ if _aws_credentials_available():
 
     @app.tool()
     async def list_s3_buckets(*, save_as: str = "s3_buckets") -> pd.DataFrame | None:
-        """List S3 buckets and return a DataFrame."""
+        """List S3 buckets and return a DataFrame.
+        
+        Args:
+            save_as (str): Variable name to store the bucket list DataFrame
+            
+        Returns:
+            pd.DataFrame: DataFrame with columns 'name' and 'creation_date'
+            
+        Examples
+        --------
+        After calling this tool with save_as="s3_buckets":
+        
+        # View all buckets
+        >>> execute_python_code("s3_buckets")
+        
+        # Get bucket names as list
+        >>> execute_python_code("s3_buckets['name'].tolist()")
+        
+        # Sort by creation date (newest first)
+        >>> execute_python_code("s3_buckets.sort_values('creation_date', ascending=False)")
+        
+        # Filter buckets by name pattern
+        >>> execute_python_code("s3_buckets[s3_buckets['name'].str.contains('prod')]")
+        
+        # Count buckets
+        >>> execute_python_code("len(s3_buckets)")
+        """
         code = f"{save_as} = _list_s3_buckets_impl()\n{save_as}"
         execution_result = await run_code_in_shell(code)
         return execution_result.result if execution_result else None

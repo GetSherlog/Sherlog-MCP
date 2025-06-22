@@ -94,7 +94,7 @@ async def run_code_in_shell(code: str):
     if _SMART_MANAGER.should_reset():
         _SMART_MANAGER.reset()
 
-    execution_result = await _SHELL.run_cell_async(code)
+    execution_result = await _SHELL.run_cell_async(code, silent=True)
 
     return execution_result
 
@@ -606,7 +606,6 @@ async def get_namespace_info() -> dict[str, Any]:
 
     """
     try:
-        # Get user namespace variables (excluding IPython internals)
         user_vars = []
         system_variables = {
             "In",
@@ -1142,12 +1141,10 @@ async def list_dataframes() -> list[dict]:
                 "rows": obj.shape[0],
                 "columns": obj.shape[1]
             }
-            # Add memory usage for pandas DataFrames
             if isinstance(obj, pd.DataFrame):
                 df_info["memory_mb"] = round(obj.memory_usage(deep=True).sum() / (1024 * 1024), 2)
             else:
-                # For polars, estimate memory usage
-                df_info["memory_mb"] = None  # Polars doesn't have built-in memory_usage
+                df_info["memory_mb"] = None
             dataframes.append(df_info)
     
     return sorted(dataframes, key=lambda x: x["name"])
@@ -1162,7 +1159,6 @@ async def session_memory_status() -> dict:
     import pandas as pd
     import polars as pl
     
-    # Count DataFrames
     dataframes = []
     for name, obj in _SHELL.user_ns.items():
         if isinstance(obj, (pd.DataFrame, pl.DataFrame)) and not name.startswith('_'):
@@ -1171,7 +1167,6 @@ async def session_memory_status() -> dict:
                 "type": type(obj).__name__,
                 "shape": obj.shape
             }
-            # Add memory usage for pandas DataFrames
             if isinstance(obj, pd.DataFrame):
                 df_info["memory_mb"] = round(obj.memory_usage(deep=True).sum() / (1024 * 1024), 2)
             dataframes.append(df_info)
@@ -1186,7 +1181,7 @@ async def session_memory_status() -> dict:
         "executions_until_reset": max(0, executions_until_reset),
         "auto_reset_threshold": _SMART_MANAGER.reset_threshold,
         "dataframes_count": len(dataframes),
-        "dataframes": dataframes[:10],  # Show up to 10 DataFrames
+        "dataframes": dataframes[:10],
         "will_reset_on_next": executions_until_reset <= 0 and len(dataframes) > 0 and _SMART_MANAGER.auto_reset_enabled
     }
 

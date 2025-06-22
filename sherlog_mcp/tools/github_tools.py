@@ -240,7 +240,26 @@ if _github_credentials_available():
         Returns:
             pd.DataFrame: Issue details as a DataFrame
             
-            Data persists as '{save_as}'. Use execute_python_code("{save_as}.iloc[0]") to view details.
+        Examples
+        --------
+        After calling this tool with save_as="issue":
+        
+        # View the full issue details (single row DataFrame)
+        >>> execute_python_code("issue")
+        
+        # View as a dictionary for easier reading
+        >>> execute_python_code("issue.iloc[0].to_dict()")
+        
+        # Access specific fields
+        >>> execute_python_code("issue.iloc[0]['title']")
+        >>> execute_python_code("issue.iloc[0]['body']")
+        >>> execute_python_code("issue.iloc[0]['state']")
+        
+        # View all column names
+        >>> execute_python_code("issue.columns.tolist()")
+        
+        # Check labels and assignees
+        >>> execute_python_code("issue.iloc[0][['labels', 'assignees']]")
 
         """
         code = f'{save_as} = get_issue_impl("{owner}", "{repo}", {issue_number})\n{save_as}'
@@ -258,6 +277,22 @@ if _github_credentials_available():
 
         Returns:
             pd.DataFrame: Test results showing connection status, user info, and rate limits
+
+        Examples
+        --------
+        After calling this tool with save_as="github_test_results":
+        
+        # View all test results
+        >>> execute_python_code("github_test_results")
+        
+        # Check if connection succeeded
+        >>> execute_python_code("github_test_results[github_test_results['test'] == 'Connection']['status']")
+        
+        # View rate limit information
+        >>> execute_python_code("github_test_results[github_test_results['test'] == 'Rate Limit']")
+        
+        # Get user information
+        >>> execute_python_code("github_test_results[github_test_results['test'] == 'User Info']")
 
         """
         code = f"{save_as} = test_github_connection_impl()\n{save_as}"
@@ -393,7 +428,30 @@ if _github_credentials_available():
         Returns:
             pd.DataFrame: Search results as a DataFrame
             
-            Results persist as '{save_as}'. Use list_dataframes() to see all data.
+        Examples
+        --------
+        After calling this tool with save_as="issues":
+        
+        # View all issues
+        >>> execute_python_code("issues")
+        
+        # Count issues by state
+        >>> execute_python_code("issues['state'].value_counts()")
+        
+        # Filter for high priority issues (by labels)
+        >>> execute_python_code("issues[issues['labels'].str.contains('high-priority')]")
+        
+        # View issues created in the last 7 days
+        >>> execute_python_code("import pandas as pd; recent = issues[pd.to_datetime(issues['created_at']) > pd.Timestamp.now() - pd.Timedelta(days=7)]")
+        
+        # Sort by comment count
+        >>> execute_python_code("issues.sort_values('comments', ascending=False).head(10)")
+        
+        # Get issue numbers and titles only
+        >>> execute_python_code("issues[['number', 'title', 'state']]")
+        
+        # Export to CSV
+        >>> execute_python_code("issues.to_csv('github_issues.csv', index=False)")
 
         """
         code = f'{save_as} = search_issues_impl("{owner}", "{repo}"'

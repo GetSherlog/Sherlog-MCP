@@ -219,7 +219,67 @@ def register_external_tool(
         "\n  save_as: str - Variable name to store results in IPython shell"
     )
     doc_lines.append(
-        "\nResults persist as '{save_as}'. Use list_dataframes() to see all data."
+        "\nResults persist as '{save_as}'."
+    )
+    doc_lines.append(
+        "\nExamples"
+    )
+    doc_lines.append(
+        "--------"
+    )
+    doc_lines.append(
+        "After calling this tool with save_as=\"result\":"
+    )
+    doc_lines.append(
+        ""
+    )
+    doc_lines.append(
+        "# View the result (format depends on the tool's return type)"
+    )
+    doc_lines.append(
+        '>>> execute_python_code("result")'
+    )
+    doc_lines.append(
+        ""
+    )
+    doc_lines.append(
+        "# If result is a DataFrame:"
+    )
+    doc_lines.append(
+        '>>> execute_python_code("result.head()")'
+    )
+    doc_lines.append(
+        '>>> execute_python_code("result.info()")'
+    )
+    doc_lines.append(
+        '>>> execute_python_code("result.columns.tolist()")'
+    )
+    doc_lines.append(
+        ""
+    )
+    doc_lines.append(
+        "# If result is a string/text:"
+    )
+    doc_lines.append(
+        '>>> execute_python_code("print(result[:500])")  # First 500 characters'
+    )
+    doc_lines.append(
+        '>>> execute_python_code("len(result.splitlines())")  # Count lines'
+    )
+    doc_lines.append(
+        ""
+    )
+    doc_lines.append(
+        "# If result is a list/dict:"
+    )
+    doc_lines.append(
+        '>>> execute_python_code("type(result)")  # Check data type'
+    )
+    doc_lines.append(
+        '>>> execute_python_code("len(result)")  # Check length'
+    )
+    doc_lines.append(
+        '>>> execute_python_code("import json; print(json.dumps(result, indent=2)[:1000])")  # Pretty print'
     )
 
     signature = inspect.Signature(parameters)

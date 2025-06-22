@@ -81,6 +81,29 @@ if _docker_available():
                           (ID, Name, Image, Status). Returns `None` if no containers
                           are found or if an error occurs (with a logged error).
 
+        Examples
+        --------
+        After calling this tool with save_as="containers":
+        
+        # View all containers
+        >>> execute_python_code("containers")
+        
+        # View first 5 containers
+        >>> execute_python_code("containers.head()")
+        
+        # Check how many containers are running
+        >>> execute_python_code("len(containers)")
+        >>> execute_python_code("containers.shape")
+        
+        # Filter containers by image
+        >>> execute_python_code("containers[containers['Image'].str.contains('nginx')]")
+        
+        # View specific columns
+        >>> execute_python_code("containers[['Name', 'Status', 'Image']]")
+        
+        # Get container IDs as a list
+        >>> execute_python_code("containers['ID'].tolist()")
+
         """
         code = f"{save_as} = list_containers_impl()\n" + f"{save_as}"
         execution_result = await run_code_in_shell(code)
@@ -119,7 +142,24 @@ if _docker_available():
         Returns:
             str: The container logs as a string, or an error message string.
             
-            Logs persist as '{save_as}'. Use execute_python_code("print({save_as}[:1000])") to view.
+        Examples
+        --------
+        After calling this tool with save_as="logs":
+        
+        # View first 1000 characters
+        >>> execute_python_code("print(logs[:1000])")
+        
+        # View last 500 characters
+        >>> execute_python_code("print(logs[-500:])")
+        
+        # Count total lines
+        >>> execute_python_code("len(logs.splitlines())")
+        
+        # Search for errors
+        >>> execute_python_code("[line for line in logs.splitlines() if 'error' in line.lower()][:10]")
+        
+        # View logs with line numbers
+        >>> execute_python_code("for i, line in enumerate(logs.splitlines()[:20]): print(f'{i+1}: {line}')")
 
         """
         code = (
@@ -193,6 +233,31 @@ if _docker_available():
         pandas.DataFrame | None
             DataFrame with columns ``timestamp``, ``message``, ``template``.  ``None``
             if log retrieval fails or no logs are available.
+            
+        Examples
+        --------
+        After calling this tool with save_as="structured_logs":
+        
+        # View all structured logs
+        >>> execute_python_code("structured_logs")
+        
+        # View first 10 log entries
+        >>> execute_python_code("structured_logs.head(10)")
+        
+        # Group by template to find patterns
+        >>> execute_python_code("structured_logs['template'].value_counts().head(10)")
+        
+        # Filter for specific templates or patterns
+        >>> execute_python_code("structured_logs[structured_logs['message'].str.contains('error', case=False)]")
+        
+        # View logs from a specific time range
+        >>> execute_python_code("structured_logs[structured_logs['timestamp'] > '2025-01-01T00:00:00']")
+        
+        # Analyze message lengths
+        >>> execute_python_code("structured_logs['message'].str.len().describe()")
+        
+        # Export to CSV for external analysis
+        >>> execute_python_code("structured_logs.to_csv('container_logs.csv', index=False)")
         """
         code = (
             f"{save_as} = _get_container_logs_structured_impl(\"{container_id}\", \"{tail}\")\n"

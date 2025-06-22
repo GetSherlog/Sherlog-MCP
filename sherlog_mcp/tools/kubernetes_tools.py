@@ -703,7 +703,33 @@ if _kubernetes_available():
         Returns:
             pd.DataFrame: Pods data as a DataFrame
             
-            Data persists as '{save_as}'. Use execute_python_code("{save_as}.query('status==\"Running\"')") to filter.
+        Examples
+        --------
+        After calling this tool with save_as="pods":
+        
+        # View all pods
+        >>> execute_python_code("pods")
+        
+        # Count pods by status
+        >>> execute_python_code("pods['status'].value_counts()")
+        
+        # Filter running pods
+        >>> execute_python_code("pods[pods['status'] == 'Running']")
+        
+        # Find pods with restarts
+        >>> execute_python_code("pods[pods['restarts'] > 0].sort_values('restarts', ascending=False)")
+        
+        # Get pod names and namespaces
+        >>> execute_python_code("pods[['name', 'namespace', 'status', 'ready', 'restarts']]")
+        
+        # Group by node
+        >>> execute_python_code("pods.groupby('node')['name'].count()")
+        
+        # Find old pods (running for more than 30 days)
+        >>> execute_python_code("pods[pods['age_days'] > 30][['name', 'age_days', 'status']]")
+        
+        # Export pod list
+        >>> execute_python_code("pods.to_csv('k8s_pods.csv', index=False)")
 
         """
         code = f'{save_as} = list_pods_impl("{namespace}"'

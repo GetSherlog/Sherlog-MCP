@@ -393,7 +393,37 @@ if _filesystem_available():
     async def read_file(file_path: str, save_as: str) -> pd.DataFrame | None:
         """Load a CSV file into a DataFrame stored as *save_as* in the shell.
         You can then use this DataFrame (defined by *save_as*) in subsequent steps.
-        Data persists as '{save_as}'. Use list_dataframes() to see all data.
+        
+        Args:
+            file_path (str): Path to the CSV file to read
+            save_as (str): Variable name to store the DataFrame
+            
+        Returns:
+            pd.DataFrame: The loaded CSV data
+            
+        Examples
+        --------
+        After calling this tool with save_as="df":
+        
+        # View the loaded data
+        >>> execute_python_code("df")
+        
+        # Check shape and columns
+        >>> execute_python_code("df.shape")
+        >>> execute_python_code("df.columns.tolist()")
+        
+        # View data types and info
+        >>> execute_python_code("df.info()")
+        >>> execute_python_code("df.dtypes")
+        
+        # Basic statistics
+        >>> execute_python_code("df.describe()")
+        
+        # Filter data
+        >>> execute_python_code("df[df['column_name'] > 100]")
+        
+        # Check for missing values
+        >>> execute_python_code("df.isnull().sum()")
         """
         code = f'{save_as} = await _read_file_impl("{file_path}")'
         execution_result = await run_code_in_shell(code)
@@ -410,7 +440,30 @@ if _filesystem_available():
         Returns:
             A Pandas DataFrame with columns: 'name', 'type' ('file' or 'directory'), 'path'.
             
-            Directory listing persists as '{save_as}'. Use execute_python_code("{save_as}[{save_as}['type']=='file']") to filter files.
+        Examples
+        --------
+        After calling this tool with save_as="files":
+        
+        # View all items in directory
+        >>> execute_python_code("files")
+        
+        # Filter for files only
+        >>> execute_python_code("files[files['type'] == 'file']")
+        
+        # Filter for directories only
+        >>> execute_python_code("files[files['type'] == 'directory']")
+        
+        # Get file names matching pattern
+        >>> execute_python_code("files[files['name'].str.endswith('.py')]")
+        
+        # Sort by name
+        >>> execute_python_code("files.sort_values('name')")
+        
+        # Count files vs directories
+        >>> execute_python_code("files['type'].value_counts()")
+        
+        # Get full paths as list
+        >>> execute_python_code("files['path'].tolist()")
 
         """
         code = f'{save_as} = await _list_directory_impl("{dir_path}")\n{save_as}'
@@ -422,12 +475,32 @@ if _filesystem_available():
         """Gets a recursive tree view of files and directories as a JSON string.
 
         Args:
-            args: A DirectoryTreeArgs object containing the root path.
+            path (str): The root path to generate tree from
+            save_as (str): Variable name to store the tree structure
 
         Returns:
-            A JSON string representing the directory tree.
+            str: A JSON string representing the directory tree.
             Each entry includes 'name', 'type' ('file'/'directory'/'inaccessible'/'error'),
             and 'children' for directories.
+            
+        Examples
+        --------
+        After calling this tool with save_as="tree":
+        
+        # View the tree structure
+        >>> execute_python_code("print(tree[:1000])")
+        
+        # Parse as JSON for analysis
+        >>> execute_python_code("import json; tree_data = json.loads(tree)")
+        
+        # Pretty print the tree
+        >>> execute_python_code("import json; print(json.dumps(json.loads(tree), indent=2)[:2000])")
+        
+        # Count total items
+        >>> execute_python_code("tree.count('\"name\"')")
+        
+        # Find specific files
+        >>> execute_python_code("'README.md' in tree")
 
         """
         code = f'{save_as} = await _directory_tree_impl("{path}")\n{save_as}'
@@ -445,11 +518,37 @@ if _filesystem_available():
         """Recursively searches for files and directories matching a pattern.
 
         Args:
-            args: A SearchFilesArgs object with path, pattern, exclude_patterns, and recursive flag.
+            path (str): Root directory to search in
+            pattern (str): File pattern to match (supports wildcards)
+            exclude_patterns (list[str]): Patterns to exclude from results
+            recursive (bool): Whether to search subdirectories
+            save_as (str): Variable name to store search results
 
         Returns:
-            A Pandas DataFrame with a single column 'path' containing full paths to matching items.
+            pd.DataFrame: DataFrame with a single column 'path' containing full paths to matching items.
             Returns an empty DataFrame if no matches are found.
+            
+        Examples
+        --------
+        After calling this tool with save_as="matches":
+        
+        # View all matching files
+        >>> execute_python_code("matches")
+        
+        # Count matches
+        >>> execute_python_code("len(matches)")
+        
+        # Get file names only (without path)
+        >>> execute_python_code("matches['path'].apply(lambda x: x.split('/')[-1])")
+        
+        # Filter by additional criteria
+        >>> execute_python_code("matches[matches['path'].str.contains('test')]")
+        
+        # Convert to list for iteration
+        >>> execute_python_code("matches['path'].tolist()")
+        
+        # Check if specific file was found
+        >>> execute_python_code("any('config.json' in path for path in matches['path'])")
 
         """
         code = f'{save_as} = await _search_files_impl("{path}", "{pattern}", "{exclude_patterns}", "{recursive}")\n{save_as}'
@@ -461,13 +560,37 @@ if _filesystem_available():
         """Retrieves detailed metadata about a file or directory.
 
         Args:
-            args: A GetFileInfoArgs object containing the path.
+            path (str): Path to the file or directory
+            save_as (str): Variable name to store file info
 
         Returns:
-            A Pandas DataFrame with a single row and columns for each piece of metadata:
+            pd.DataFrame: DataFrame with a single row containing metadata:
             'name', 'path', 'type', 'size_bytes', 'created_timestamp',
             'modified_timestamp', 'accessed_timestamp', 'permissions_octal',
             'is_symlink', 'absolute_path', and 'symlink_target' (if applicable).
+            
+        Examples
+        --------
+        After calling this tool with save_as="info":
+        
+        # View all file metadata
+        >>> execute_python_code("info")
+        
+        # Get specific attributes
+        >>> execute_python_code("info.iloc[0]['size_bytes']")
+        >>> execute_python_code("info.iloc[0]['type']")
+        
+        # Convert to dictionary for easy access
+        >>> execute_python_code("info.iloc[0].to_dict()")
+        
+        # Check file size in MB
+        >>> execute_python_code("info.iloc[0]['size_bytes'] / (1024 * 1024)")
+        
+        # Format timestamps
+        >>> execute_python_code("import pandas as pd; pd.to_datetime(info.iloc[0]['modified_timestamp'])")
+        
+        # Check permissions
+        >>> execute_python_code("oct(info.iloc[0]['permissions_octal'])")
 
         """
         code = f'{save_as} = await _get_file_info_impl("{path}")\n{save_as}'

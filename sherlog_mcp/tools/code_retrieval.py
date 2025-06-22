@@ -518,8 +518,27 @@ if _codebase_path_available():
             pd.DataFrame: Method implementations found as a DataFrame with columns:
             name, implementation, file_path, line_start, line_end, doc_comment, class_name
             
-            Results saved as '{save_as}' persist for analysis.
-            Use execute_python_code("{save_as}['implementation'].iloc[0]") to view code.
+        Examples
+        --------
+        After calling this tool with save_as="method_results":
+        
+        # View all found methods
+        >>> execute_python_code("method_results")
+        
+        # View the first implementation
+        >>> execute_python_code("print(method_results['implementation'].iloc[0])")
+        
+        # Get file paths and line numbers
+        >>> execute_python_code("method_results[['file_path', 'line_start', 'line_end']]")
+        
+        # Filter by class name
+        >>> execute_python_code("method_results[method_results['class_name'] == 'MyClass']")
+        
+        # View documentation comments
+        >>> execute_python_code("method_results['doc_comment'].iloc[0]")
+        
+        # Export to file
+        >>> execute_python_code("method_results.to_csv('methods_found.csv', index=False)")
 
         """
         if class_name:
@@ -543,8 +562,24 @@ if _codebase_path_available():
         Returns:
             pd.DataFrame: Class implementations found
             
-            Results saved as '{save_as}' persist for analysis.
-            Use execute_python_code("{save_as}.head()") to explore.
+        Examples
+        --------
+        After calling this tool with save_as="class_results":
+        
+        # View all found classes
+        >>> execute_python_code("class_results")
+        
+        # View the first implementation
+        >>> execute_python_code("print(class_results['implementation'].iloc[0])")
+        
+        # Get file locations
+        >>> execute_python_code("class_results[['file_path', 'line_start', 'line_end']]")
+        
+        # Check implementation length
+        >>> execute_python_code("class_results['implementation'].str.len()")
+        
+        # View specific class by index
+        >>> execute_python_code("print(class_results.iloc[0]['implementation'][:500])")
 
         """
         code = f'{save_as} = _find_class_implementation_impl("{class_name}")\n{save_as}'
@@ -562,7 +597,27 @@ if _codebase_path_available():
         Returns:
             pd.DataFrame: All methods with their class names and file paths
             
-            Data persists as '{save_as}'. Use list_dataframes() to see all data.
+        Examples
+        --------
+        After calling this tool with save_as="all_methods":
+        
+        # View all methods
+        >>> execute_python_code("all_methods")
+        
+        # Count methods per class
+        >>> execute_python_code("all_methods['class_name'].value_counts().head(20)")
+        
+        # Filter by class name pattern
+        >>> execute_python_code("all_methods[all_methods['class_name'].str.contains('Service')]")
+        
+        # Group by file
+        >>> execute_python_code("all_methods.groupby('file_path')['method_name'].count()")
+        
+        # Find methods with specific names
+        >>> execute_python_code("all_methods[all_methods['method_name'].str.contains('init')]")
+        
+        # Get unique class names
+        >>> execute_python_code("all_methods['class_name'].unique()")
 
         """
         code = f"{save_as} = _list_all_methods_impl()\n{save_as}"
@@ -579,6 +634,25 @@ if _codebase_path_available():
 
         Returns:
             pd.DataFrame: All classes with their file paths
+            
+        Examples
+        --------
+        After calling this tool with save_as="all_classes":
+        
+        # View all classes
+        >>> execute_python_code("all_classes")
+        
+        # Count classes per file
+        >>> execute_python_code("all_classes['file_path'].value_counts()")
+        
+        # Filter by file path pattern
+        >>> execute_python_code("all_classes[all_classes['file_path'].str.contains('models/')]")
+        
+        # Get class names only
+        >>> execute_python_code("all_classes['class_name'].tolist()")
+        
+        # Find classes with specific naming pattern
+        >>> execute_python_code("all_classes[all_classes['class_name'].str.endswith('Service')]")
 
         """
         code = f"{save_as} = _list_all_classes_impl()\n{save_as}"
