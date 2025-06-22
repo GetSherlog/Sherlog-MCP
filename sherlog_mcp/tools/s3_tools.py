@@ -58,10 +58,6 @@ if _aws_credentials_available():
             s3_client = session.client("s3", region_name=settings.aws_region)
 
             s3_client.list_buckets()
-
-            logger.info(
-                f"Successfully initialized S3 client for region: {settings.aws_region}"
-            )
             return s3_client
 
         except NoCredentialsError:
@@ -107,7 +103,6 @@ if _aws_credentials_available():
         ]
 
         df = pd.DataFrame(rows)
-        logger.info("Listed %s S3 buckets", len(rows))
         return df
 
     def _list_s3_objects_impl(
@@ -137,7 +132,6 @@ if _aws_credentials_available():
         ]
 
         df = pd.DataFrame(rows)
-        logger.info("Listed %s objects in %s", len(rows), bucket_name)
         return df
 
     _SHELL.push(
@@ -314,7 +308,6 @@ if _aws_credentials_available():
                 "metadata": response.get("Metadata", {}),
             }
 
-            logger.info(f"Retrieved info for s3://{bucket_name}/{key}")
             return json.dumps(result, indent=2)
 
         except ClientError as e:
@@ -384,9 +377,6 @@ if _aws_credentials_available():
                 else None,
             }
 
-            logger.info(
-                f"Read content from s3://{bucket_name}/{key} ({size_bytes} bytes)"
-            )
             return json.dumps(result, indent=2)
 
         except ClientError as e:

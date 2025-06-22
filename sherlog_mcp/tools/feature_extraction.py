@@ -212,6 +212,9 @@ def _extract_timeseries_features_impl(
         A DataFrame where rows typically represent time windows and groups, and
         columns include counts and group identifiers. The exact structure is
         determined by LogAI's `FeatureExtractor.convert_to_counter_vector`.
+        
+        Results persist as save_as. Use execute_python_code() to analyze further.
+        Data parameters can be DataFrame variables from previous tool calls.
 
     Examples
     --------

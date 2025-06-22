@@ -91,12 +91,10 @@ if _grafana_credentials_available():
 
         payload = {"queries": targets}
 
-        logger.info(f"Executing Prometheus query: {query}")
         response = session.post(url, json=payload)
         response.raise_for_status()
 
         result = response.json()
-        logger.info("Prometheus query completed successfully")
 
         rows = []
         if "results" in result:
@@ -167,6 +165,8 @@ if _grafana_credentials_available():
 
         Returns:
             pd.DataFrame: Query results from Prometheus as a DataFrame
+            
+            Data persists as '{save_as}'. Use execute_python_code("{save_as}.head()") to explore.
 
         """
         code = f'{save_as} = query_prometheus_impl("{datasource_uid}", "{query}", "{query_type}"'
@@ -202,15 +202,10 @@ if _grafana_credentials_available():
         params = {}
         if metric:
             params["metric"] = metric
-
-        logger.info(
-            f"Fetching Prometheus metric metadata for datasource: {datasource_uid}"
-        )
         response = session.get(url, params=params)
         response.raise_for_status()
 
         result = response.json()
-        logger.info(f"Retrieved metadata for {len(result.get('data', {}))} metrics")
 
         rows = []
         metadata = result.get("data", {})
@@ -275,16 +270,11 @@ if _grafana_credentials_available():
             f"/api/datasources/proxy/{datasource_uid}/api/v1/label/__name__/values"
         )
         url = urljoin(grafana_url, endpoint)
-
-        logger.info(
-            f"Fetching Prometheus metric names for datasource: {datasource_uid}"
-        )
         response = session.get(url)
         response.raise_for_status()
 
         result = response.json()
         metric_names = result.get("data", [])
-        logger.info(f"Retrieved {len(metric_names)} metric names")
 
         df = pd.DataFrame(
             {
@@ -339,13 +329,11 @@ if _grafana_credentials_available():
         if match:
             params["match[]"] = match
 
-        logger.info(f"Fetching Prometheus label names for datasource: {datasource_uid}")
         response = session.get(url, params=params)
         response.raise_for_status()
 
         result = response.json()
         label_names = result.get("data", [])
-        logger.info(f"Retrieved {len(label_names)} label names")
 
         df = pd.DataFrame(
             {
@@ -409,15 +397,11 @@ if _grafana_credentials_available():
         if match:
             params["match[]"] = match
 
-        logger.info(
-            f"Fetching Prometheus label values for label '{label}' in datasource: {datasource_uid}"
-        )
         response = session.get(url, params=params)
         response.raise_for_status()
 
         result = response.json()
         label_values = result.get("data", [])
-        logger.info(f"Retrieved {len(label_values)} values for label '{label}'")
 
         df = pd.DataFrame(
             {
@@ -505,13 +489,10 @@ if _grafana_credentials_available():
             targets[0]["end"] = end
 
         payload = {"queries": targets}
-
-        logger.info(f"Executing Loki query: {query}")
         response = session.post(url, json=payload)
         response.raise_for_status()
 
         result = response.json()
-        logger.info("Loki query completed successfully")
 
         rows = []
         if "results" in result:
@@ -632,13 +613,11 @@ if _grafana_credentials_available():
         if end:
             params["end"] = end
 
-        logger.info(f"Fetching Loki label names for datasource: {datasource_uid}")
         response = session.get(url, params=params)
         response.raise_for_status()
 
         result = response.json()
         label_names = result.get("data", [])
-        logger.info(f"Retrieved {len(label_names)} label names from Loki")
 
         df = pd.DataFrame(
             {
@@ -722,17 +701,11 @@ if _grafana_credentials_available():
         if query:
             params["query"] = query
 
-        logger.info(
-            f"Fetching Loki label values for label '{label}' in datasource: {datasource_uid}"
-        )
         response = session.get(url, params=params)
         response.raise_for_status()
 
         result = response.json()
         label_values = result.get("data", [])
-        logger.info(
-            f"Retrieved {len(label_values)} values for label '{label}' from Loki"
-        )
 
         df = pd.DataFrame(
             {
@@ -820,7 +793,6 @@ if _grafana_credentials_available():
         if end:
             params["end"] = end
 
-        logger.info(f"Fetching Loki stats for query: {query}")
         response = session.get(url, params=params)
         response.raise_for_status()
 

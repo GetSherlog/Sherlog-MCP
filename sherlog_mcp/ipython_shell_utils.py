@@ -5,7 +5,7 @@ from typing import Any
 from IPython.core.interactiveshell import InteractiveShell
 from IPython.core.completer import IPCompleter
 
-from sherlog_mcp.session import app, logger
+from sherlog_mcp.session import app
 
 import pandas as pd
 import polars as pl
@@ -103,6 +103,10 @@ async def run_code_in_shell(code: str):
 async def execute_python_code(code: str):
     """Executes a given string of Python code in the underlying IPython interactive shell.
 
+    Executes Python code in a persistent IPython session where all variables
+    from previous tool calls are available. Use list_dataframes() to see available
+    data or list_shell_variables() for all variables.
+
     This tool allows for direct execution of arbitrary Python code, including
     defining variables, calling functions, or running any valid Python statements.
     The code is run in the same IPython shell instance used by other tools,
@@ -151,10 +155,9 @@ async def execute_python_code(code: str):
     """
     stdout_buffer = io.StringIO()
     stderr_buffer = io.StringIO()
-    
-    # Limit output size to prevent transport issues
+
     import os
-    MAX_OUTPUT_SIZE = int(os.getenv('MCP_MAX_OUTPUT_SIZE', '50000'))  # Default 50KB limit per buffer
+    MAX_OUTPUT_SIZE = int(os.getenv('MCP_MAX_OUTPUT_SIZE', '50000'))
 
     with (
         contextlib.redirect_stdout(stdout_buffer),
@@ -163,14 +166,11 @@ async def execute_python_code(code: str):
         try:
             result = await run_code_in_shell(code)
         except Exception as e:
-            # Handle any execution errors gracefully
-            logger.error(f"Error executing code: {e}")
             result = None
 
     stdout_value = stdout_buffer.getvalue()
     stderr_value = stderr_buffer.getvalue()
     
-    # Truncate output if too large
     if len(stdout_value) > MAX_OUTPUT_SIZE:
         stdout_value = stdout_value[:MAX_OUTPUT_SIZE] + "\n... (output truncated)"
     if len(stderr_value) > MAX_OUTPUT_SIZE:
@@ -180,7 +180,6 @@ async def execute_python_code(code: str):
 
     if result is not None:
         if not result.error_before_exec and not result.error_in_exec:
-            # Import the conversion function to handle DataFrames properly
             from sherlog_mcp.dataframe_utils import to_json_serializable
             execution_details_dict["result"] = to_json_serializable(result.result)
 
@@ -521,7 +520,6 @@ async def get_completions(text: str, cursor_pos: int | None = None) -> dict[str,
             "total_matches": len(matches) if hasattr(matches, '__len__') else 0,
         }
     except Exception as e:
-        logger.error(f"Error getting completions: {e}")
         return {
             "text": "",
             "matches": [],
@@ -581,7 +579,6 @@ async def get_function_signature(func_name: str) -> dict[str, Any]:
             "call_docstring": info.get("call_docstring", ""),
         }
     except Exception as e:
-        logger.error(f"Error getting function signature for {func_name}: {e}")
         return {"error": str(e)}
 
 
@@ -670,7 +667,6 @@ async def get_namespace_info() -> dict[str, Any]:
             "total_user_objects": len(user_vars),
         }
     except Exception as e:
-        logger.error(f"Error getting namespace info: {e}")
         return {"error": str(e)}
 
 
@@ -716,7 +712,6 @@ async def get_object_source(object_name: str) -> dict[str, Any]:
             "docstring": info.get("docstring", ""),
         }
     except Exception as e:
-        logger.error(f"Error getting source for {object_name}: {e}")
         return {"error": str(e)}
 
 
@@ -796,7 +791,6 @@ async def list_object_attributes(
             "include_private": include_private,
         }
     except Exception as e:
-        logger.error(f"Error listing attributes for {object_name}: {e}")
         return {"error": str(e)}
 
 
@@ -840,7 +834,6 @@ async def get_docstring(object_name: str) -> dict[str, Any]:
             "has_docstring": bool(docstring.strip()),
         }
     except Exception as e:
-        logger.error(f"Error getting docstring for {object_name}: {e}")
         return {"error": str(e)}
 
 
@@ -894,7 +887,6 @@ async def get_last_exception_info() -> dict[str, Any]:
             "traceback_lines": lines,
         }
     except Exception as e:
-        logger.error(f"Error getting exception info: {e}")
         return {"error": str(e), "has_exception": False}
 
 
@@ -1015,7 +1007,6 @@ async def check_code_completeness(code: str) -> dict[str, Any]:
             "suggested_indent_length": len(indent) if indent else 0,
         }
     except Exception as e:
-        logger.error(f"Error checking code completeness: {e}")
         return {
             "status": "error",
             "indent": "",
@@ -1059,7 +1050,6 @@ async def list_available_magics() -> dict[str, Any]:
             "total_magics": len(line_magics) + len(cell_magics),
         }
     except Exception as e:
-        logger.error(f"Error listing available magics: {e}")
         return {"error": str(e)}
 
 
@@ -1120,13 +1110,47 @@ async def get_magic_help(magic_name: str, magic_type: str = "line") -> dict[str,
             "magic_name": magic_name,
         }
     except Exception as e:
-        logger.error(f"Error getting magic help for {magic_name}: {e}")
         return {
             "exists": False,
             "error": str(e),
             "magic_type": magic_type,
             "magic_name": magic_name,
         }
+
+
+@app.tool()
+async def list_dataframes() -> list[dict]:
+    """List all DataFrame variables with their shapes and memory usage.
+    
+    Returns lightweight metadata about DataFrames in the session.
+    Useful for discovering what data is available from previous tool calls.
+    
+    Returns
+    -------
+    list[dict]
+        Each dict contains: name, type (pandas/polars), rows, columns, memory_mb
+    """
+    import pandas as pd
+    import polars as pl
+    
+    dataframes = []
+    for name, obj in _SHELL.user_ns.items():
+        if isinstance(obj, (pd.DataFrame, pl.DataFrame)) and not name.startswith('_'):
+            df_info = {
+                "name": name,
+                "type": "pandas" if isinstance(obj, pd.DataFrame) else "polars",
+                "rows": obj.shape[0],
+                "columns": obj.shape[1]
+            }
+            # Add memory usage for pandas DataFrames
+            if isinstance(obj, pd.DataFrame):
+                df_info["memory_mb"] = round(obj.memory_usage(deep=True).sum() / (1024 * 1024), 2)
+            else:
+                # For polars, estimate memory usage
+                df_info["memory_mb"] = None  # Polars doesn't have built-in memory_usage
+            dataframes.append(df_info)
+    
+    return sorted(dataframes, key=lambda x: x["name"])
 
 
 @app.tool()

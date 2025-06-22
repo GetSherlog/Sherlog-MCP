@@ -63,7 +63,6 @@ async def register_mcp_tools(mcp_name: str, mcp_config: dict[str, Any]):
         mcp_config: Configuration dict with command, args, and env
 
     """
-    logger.info(f"Connecting to external MCP: {mcp_name}")
 
     if not mcp_config.get("command"):
         raise ValueError(f"Missing 'command' in configuration for {mcp_name}")
@@ -140,7 +139,6 @@ def _create_parameter_from_schema(param_name: str, param_info: dict) -> inspect.
     param_type = param_info.get("type", "string")
     default_value = param_info.get("default", inspect.Parameter.empty)
     
-    # Map JSON schema types to Python types for better introspection
     type_mapping = {
         "string": str,
         "integer": int,
@@ -152,7 +150,6 @@ def _create_parameter_from_schema(param_name: str, param_info: dict) -> inspect.
     
     annotation = type_mapping.get(param_type, Any)
     
-    # If no default provided but parameter is not required, make it optional
     if default_value == inspect.Parameter.empty:
         annotation = Optional[annotation]
         default_value = None
@@ -178,16 +175,12 @@ def register_external_tool(
     """
     full_tool_name = f"external_{mcp_name}_{tool_info.name}"
 
-    logger.debug(f"Registering tool: {full_tool_name}")
-
-    # Build docstring
     doc_lines = []
     if tool_info.description:
         doc_lines.append(tool_info.description)
     doc_lines.append(f"\n[External MCP: {mcp_name}]")
     doc_lines.append(f"[Original tool: {tool_info.name}]")
 
-    # Extract parameter information from schema
     parameters = []
     required_params = set()
     
@@ -206,17 +199,14 @@ def register_external_tool(
                     f"  {param_name}: {param_type}{req_str} - {param_desc}"
                 )
                 
-                # Create parameter for function signature
                 try:
                     param = _create_parameter_from_schema(param_name, param_info)
                     if required and param.default != inspect.Parameter.empty:
-                        # Required parameters should not have defaults
                         param = param.replace(default=inspect.Parameter.empty)
                     parameters.append(param)
                 except Exception as e:
                     logger.warning(f"Failed to create parameter {param_name}: {e}")
 
-    # Always add save_as parameter
     save_as_param = inspect.Parameter(
         "save_as",
         inspect.Parameter.KEYWORD_ONLY,
@@ -228,24 +218,23 @@ def register_external_tool(
     doc_lines.append(
         "\n  save_as: str - Variable name to store results in IPython shell"
     )
+    doc_lines.append(
+        "\nResults persist as '{save_as}'. Use list_dataframes() to see all data."
+    )
 
-    # Create function signature
     signature = inspect.Signature(parameters)
 
     def create_tool_function():
         async def tool_impl(*args, **kwargs) -> Any:
-            # Bind arguments to signature to validate them
             try:
                 bound_args = signature.bind(*args, **kwargs)
                 bound_args.apply_defaults()
             except TypeError as e:
                 raise ValueError(f"Invalid arguments for {tool_info.name}: {e}")
             
-            # Extract save_as and remove from params sent to external tool
             call_params = dict(bound_args.arguments)
             save_as = call_params.pop("save_as", f"{full_tool_name}_result")
             
-            # Validate required parameters
             missing_required = []
             for param_name in required_params:
                 if param_name not in call_params or call_params[param_name] is None:
@@ -267,9 +256,7 @@ def register_external_tool(
             try:
                 execution_result = await run_code_in_shell(code)
                 
-                # Check if the execution resulted in an error
                 if execution_result and hasattr(execution_result, 'error_in_exec') and execution_result.error_in_exec:
-                    # Return the error information instead of trying to get the result
                     error_msg = str(execution_result.error_in_exec)
                     return {
                         "error": error_msg,
@@ -283,12 +270,10 @@ def register_external_tool(
                 if isinstance(shell_result, (pd.DataFrame, pl.DataFrame)):
                     return to_json_serializable(shell_result)
                 elif isinstance(shell_result, dict) and "error" in shell_result:
-                    # If the result is an error dictionary, return it as-is
                     return shell_result
                 else:
                     return execution_result.result if execution_result else None
             except Exception as e:
-                # Return error information instead of re-raising
                 return {
                     "error": str(e),
                     "error_type": type(e).__name__,

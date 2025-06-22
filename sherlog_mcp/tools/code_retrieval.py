@@ -118,7 +118,7 @@ class ExactCodeRetriever:
                     continue
 
                 treesitter_parser = Treesitter.create_treesitter(lang_enum)
-                class_nodes, method_nodes = treesitter_parser.parse(file_bytes)
+                _, method_nodes = treesitter_parser.parse(file_bytes)
 
                 for method_node in method_nodes:
                     if method_node.name == method_name:
@@ -320,8 +320,6 @@ def _find_method_implementation_impl(
 
     data = [result.to_dict() for result in results]
     df = pd.DataFrame(data)
-
-    logger.info(f"Found {len(results)} method implementations for '{method_name}'")
     return df
 
 
@@ -370,8 +368,6 @@ def _find_class_implementation_impl(
 
     data = [result.to_dict() for result in results]
     df = pd.DataFrame(data)
-
-    logger.info(f"Found {len(results)} class implementations for '{class_name}'")
     return df
 
 
@@ -406,8 +402,6 @@ def _list_all_methods_impl(
         return pd.DataFrame(columns=["method_name", "class_name", "file_path"])
 
     df = pd.DataFrame(methods, columns=["method_name", "class_name", "file_path"])
-
-    logger.info(f"Found {len(methods)} methods in codebase")
     return df
 
 
@@ -491,10 +485,6 @@ def _get_codebase_stats_impl(
         )
 
     df = pd.DataFrame(data)
-
-    logger.info(
-        f"Codebase contains {sum(stats.values())} files across {len(stats)} languages"
-    )
     return df
 
 
@@ -525,7 +515,11 @@ if _codebase_path_available():
             save_as: Variable name to save results in IPython shell
 
         Returns:
-            pd.DataFrame: Method implementations found as a DataFrame
+            pd.DataFrame: Method implementations found as a DataFrame with columns:
+            name, implementation, file_path, line_start, line_end, doc_comment, class_name
+            
+            Results saved as '{save_as}' persist for analysis.
+            Use execute_python_code("{save_as}['implementation'].iloc[0]") to view code.
 
         """
         if class_name:
@@ -548,6 +542,9 @@ if _codebase_path_available():
 
         Returns:
             pd.DataFrame: Class implementations found
+            
+            Results saved as '{save_as}' persist for analysis.
+            Use execute_python_code("{save_as}.head()") to explore.
 
         """
         code = f'{save_as} = _find_class_implementation_impl("{class_name}")\n{save_as}'
@@ -564,6 +561,8 @@ if _codebase_path_available():
 
         Returns:
             pd.DataFrame: All methods with their class names and file paths
+            
+            Data persists as '{save_as}'. Use list_dataframes() to see all data.
 
         """
         code = f"{save_as} = _list_all_methods_impl()\n{save_as}"

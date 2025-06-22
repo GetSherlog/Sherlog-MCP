@@ -6,7 +6,6 @@ Tools are automatically registered with the FastMCP app when imported.
 
 from . import (
     anomaly,
-    cloudwatch_tools,
     clustering,
     code_retrieval,
     data_loading,
@@ -33,7 +32,6 @@ __all__ = [
     "grafana_tools",
     "github_tools",
     "s3_tools",
-    "cloudwatch_tools",
     "code_retrieval",
     "mixpanel_tools",
 ]
@@ -80,21 +78,6 @@ try:
         list_commits,
         list_pull_requests,
         search_issues,
-    )
-except ImportError:
-    pass
-
-try:
-    from .cloudwatch_tools import (
-        get_alarm_history,
-        get_log_events,
-        get_metric_statistics,
-        list_alarms,
-        list_log_groups,
-        list_log_streams,
-        list_metrics,
-        put_metric_data,
-        query_logs,
     )
 except ImportError:
     pass

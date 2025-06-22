@@ -393,6 +393,7 @@ if _filesystem_available():
     async def read_file(file_path: str, save_as: str) -> pd.DataFrame | None:
         """Load a CSV file into a DataFrame stored as *save_as* in the shell.
         You can then use this DataFrame (defined by *save_as*) in subsequent steps.
+        Data persists as '{save_as}'. Use list_dataframes() to see all data.
         """
         code = f'{save_as} = await _read_file_impl("{file_path}")'
         execution_result = await run_code_in_shell(code)
@@ -408,6 +409,8 @@ if _filesystem_available():
 
         Returns:
             A Pandas DataFrame with columns: 'name', 'type' ('file' or 'directory'), 'path'.
+            
+            Directory listing persists as '{save_as}'. Use execute_python_code("{save_as}[{save_as}['type']=='file']") to filter files.
 
         """
         code = f'{save_as} = await _list_directory_impl("{dir_path}")\n{save_as}'

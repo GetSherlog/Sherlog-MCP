@@ -85,7 +85,6 @@ def _list_namespaces_impl() -> pd.DataFrame:
     try:
         v1, _ = _get_k8s_client()
 
-        logger.info("Listing Kubernetes namespaces")
         namespaces = v1.list_namespace()
 
         if not namespaces.items:
@@ -112,7 +111,6 @@ def _list_namespaces_impl() -> pd.DataFrame:
             }
             rows.append(row)
 
-        logger.info(f"Retrieved {len(rows)} namespaces")
         return pd.DataFrame(rows)
 
     except ApiException as e:
@@ -138,8 +136,6 @@ def _list_pods_impl(
     """
     try:
         v1, _ = _get_k8s_client()
-
-        logger.info(f"Listing Kubernetes pods in namespace: {namespace}")
 
         if namespace == "all":
             pods = v1.list_pod_for_all_namespaces(label_selector=label_selector)
@@ -197,7 +193,6 @@ def _list_pods_impl(
             }
             rows.append(row)
 
-        logger.info(f"Retrieved {len(rows)} pods")
         df = smart_create_dataframe(rows, prefer_polars=True)
         return to_pandas(df)
 
@@ -230,8 +225,6 @@ def _get_pod_logs_impl(
     try:
         v1, _ = _get_k8s_client()
 
-        logger.info(f"Getting logs for pod {pod_name} in namespace {namespace}")
-
         kwargs = {
             "name": pod_name,
             "namespace": namespace,
@@ -244,9 +237,6 @@ def _get_pod_logs_impl(
 
         logs = v1.read_namespaced_pod_log(**kwargs)
 
-        logger.info(
-            f"Retrieved {len(logs.splitlines())} lines of logs for pod {pod_name}"
-        )
         return logs
 
     except ApiException as e:
@@ -269,8 +259,6 @@ def _list_services_impl(namespace: str = "default") -> pd.DataFrame:
     """
     try:
         v1, _ = _get_k8s_client()
-
-        logger.info(f"Listing Kubernetes services in namespace: {namespace}")
 
         if namespace == "all":
             services = v1.list_service_for_all_namespaces()
@@ -331,7 +319,6 @@ def _list_services_impl(namespace: str = "default") -> pd.DataFrame:
             }
             rows.append(row)
 
-        logger.info(f"Retrieved {len(rows)} services")
         return pd.DataFrame(rows)
 
     except ApiException as e:
@@ -354,8 +341,6 @@ def _list_deployments_impl(namespace: str = "default") -> pd.DataFrame:
     """
     try:
         _, apps_v1 = _get_k8s_client()
-
-        logger.info(f"Listing Kubernetes deployments in namespace: {namespace}")
 
         if namespace == "all":
             deployments = apps_v1.list_deployment_for_all_namespaces()
@@ -399,7 +384,6 @@ def _list_deployments_impl(namespace: str = "default") -> pd.DataFrame:
             }
             rows.append(row)
 
-        logger.info(f"Retrieved {len(rows)} deployments")
         return pd.DataFrame(rows)
 
     except ApiException as e:
@@ -423,8 +407,6 @@ def _list_events_impl(namespace: str = "default", limit: int = 100) -> pd.DataFr
     """
     try:
         v1, _ = _get_k8s_client()
-
-        logger.info(f"Listing Kubernetes events in namespace: {namespace}")
 
         if namespace == "all":
             events = v1.list_event_for_all_namespaces(limit=limit)
@@ -477,7 +459,6 @@ def _list_events_impl(namespace: str = "default", limit: int = 100) -> pd.DataFr
         if not df.empty and "last_seen" in df.columns:
             df = df.sort_values("last_seen", ascending=False, na_position="last")
 
-        logger.info(f"Retrieved {len(rows)} events")
         return df
 
     except ApiException as e:
@@ -502,7 +483,6 @@ def _get_pod_details_impl(pod_name: str, namespace: str = "default") -> pd.DataF
     try:
         v1, _ = _get_k8s_client()
 
-        logger.info(f"Getting details for pod {pod_name} in namespace {namespace}")
         response = v1.read_namespaced_pod(name=pod_name, namespace=namespace)
 
         if isinstance(response, str):
@@ -582,7 +562,6 @@ def _get_pod_details_impl(pod_name: str, namespace: str = "default") -> pd.DataF
             else None,  # type: ignore
         }
 
-        logger.info(f"Retrieved details for pod {pod_name}")
         return pd.DataFrame([row])
 
     except ApiException as e:
@@ -603,7 +582,6 @@ def _list_nodes_impl() -> pd.DataFrame:
     try:
         v1, _ = _get_k8s_client()
 
-        logger.info("Listing Kubernetes nodes")
         nodes = v1.list_node()
 
         if not nodes.items:
@@ -667,7 +645,6 @@ def _list_nodes_impl() -> pd.DataFrame:
             }
             rows.append(row)
 
-        logger.info(f"Retrieved {len(rows)} nodes")
         return pd.DataFrame(rows)
 
     except ApiException as e:
@@ -702,6 +679,8 @@ if _kubernetes_available():
 
         Returns:
             pd.DataFrame: Namespaces data as a DataFrame
+            
+            Data persists as '{save_as}'. Use list_dataframes() to see all data.
 
         """
         code = f"{save_as} = list_namespaces_impl()\n{save_as}"
@@ -723,6 +702,8 @@ if _kubernetes_available():
 
         Returns:
             pd.DataFrame: Pods data as a DataFrame
+            
+            Data persists as '{save_as}'. Use execute_python_code("{save_as}.query('status==\"Running\"')") to filter.
 
         """
         code = f'{save_as} = list_pods_impl("{namespace}"'
@@ -779,6 +760,8 @@ if _kubernetes_available():
 
         Returns:
             pd.DataFrame: Services data as a DataFrame
+            
+            Data persists as '{save_as}'. Use list_dataframes() to see all data.
 
         """
         code = f'{save_as} = list_services_impl("{namespace}")\n{save_as}'
@@ -799,6 +782,8 @@ if _kubernetes_available():
 
         Returns:
             pd.DataFrame: Deployments data as a DataFrame
+            
+            Data persists as '{save_as}'. Use execute_python_code("{save_as}[['name', 'ready', 'available']]") to view key info.
 
         """
         code = f'{save_as} = list_deployments_impl("{namespace}")\n{save_as}'
@@ -820,6 +805,8 @@ if _kubernetes_available():
 
         Returns:
             pd.DataFrame: Events data as a DataFrame
+            
+            Data persists as '{save_as}'. Use execute_python_code("{save_as}[{save_as}['type']=='Warning']") to see warnings.
 
         """
         code = f'{save_as} = list_events_impl("{namespace}", {limit})\n{save_as}'

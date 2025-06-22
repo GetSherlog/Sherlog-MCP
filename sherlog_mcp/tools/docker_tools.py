@@ -40,7 +40,6 @@ def _list_containers_impl() -> pd.DataFrame | None:
 
     """
     client = docker.from_env()
-    logger.info("Listing Docker containers...")
     containers = client.containers.list()
     if not containers:
         return None
@@ -54,7 +53,6 @@ def _list_containers_impl() -> pd.DataFrame | None:
                 "Status": container.status,
             }
         )
-    logger.info(f"Found {len(container_list)} containers.")
     container_data_df = smart_create_dataframe(container_list, prefer_polars=True)
     return to_pandas(container_data_df)
 
@@ -63,7 +61,6 @@ _SHELL.push({"list_containers_impl": _list_containers_impl})
 
 
 if _docker_available():
-    logger.info("Docker daemon detected - registering Docker tools")
 
     @app.tool()
     async def list_containers(*, save_as: str) -> pd.DataFrame | None:
@@ -121,6 +118,8 @@ if _docker_available():
 
         Returns:
             str: The container logs as a string, or an error message string.
+            
+            Logs persist as '{save_as}'. Use execute_python_code("print({save_as}[:1000])") to view.
 
         """
         code = (
@@ -164,7 +163,6 @@ if _docker_available():
         try:
             templates_series = _parse_log_data_impl(messages, parsing_algorithm="drain")
         except Exception as exc:
-            logger.warning("Drain parsing failed: %s: %s", type(exc).__name__, exc)
             templates_series = pd.Series([None] * len(messages), name="template")
 
         df = pd.DataFrame(rows)

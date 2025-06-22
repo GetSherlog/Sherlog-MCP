@@ -38,6 +38,9 @@ def _detect_timeseries_anomalies_impl(
 ) -> tuple[pd.Series, pd.DataFrame]:
     """Low-level implementation for detecting time-series anomalies.
 
+    Data parameters can be DataFrame variables from previous tool calls.
+    Use list_dataframes() to see available DataFrames.
+
     Parameters
     ----------
     counter_vector_data : pandas.DataFrame
@@ -70,6 +73,9 @@ def _detect_timeseries_anomalies_impl(
         ``anomalies_df``
             Sub-DataFrame of *counter_vector_data* flagged as anomalous (here:
             *score* > 0).
+            
+        Results persist as save_scores_as and save_anomalies_as.
+        Use execute_python_code() to analyze, e.g. "{save_anomalies_as}.describe()"
 
     """
     ad_cfg = AnomalyDetectionConfig()

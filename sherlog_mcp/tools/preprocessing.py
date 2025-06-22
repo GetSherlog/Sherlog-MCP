@@ -52,7 +52,12 @@ def _preprocess_log_data_impl(
     log_record: LogRecordObject,
     custom_replace_list: list[list[str]],
 ) -> tuple[pd.Series, list[list[str]], pd.DataFrame]:
-    """Clean raw log lines, extract attributes. Returns (cleaned_logs, patterns, attributes)."""
+    """Clean raw log lines, extract attributes. Returns (cleaned_logs, patterns, attributes).
+    
+    The outputs persist as save_clean_as, save_patterns_as, save_attributes_as.
+    Use execute_python_code() to work with cleaned data, e.g. "{save_clean_as}.head()"
+    Data parameters can be DataFrame variables from previous tool calls.
+    Use list_dataframes() to see available DataFrames."""
     loglines = log_record.body[constants.LOGLINE_NAME]  # type: ignore
     attributes = log_record.attributes  # type: ignore
 

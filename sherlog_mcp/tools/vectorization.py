@@ -22,10 +22,6 @@ from sherlog_mcp.session import (
     app,
 )
 
-# ---------------------------------------------------------------------------
-# Vectorise parsed log templates
-# ---------------------------------------------------------------------------
-
 
 def _vectorize_log_data_impl(
     parsed_loglines: Any,
@@ -94,6 +90,9 @@ def _vectorize_log_data_impl(
     - The `parsed_loglines` input is resolved using `_resolve`.
     - Input data is converted to a pandas Series of strings before processing.
     - The LogAI `LogVectorizer` is used for fitting and transforming the data.
+    
+    Data parameters can be DataFrame/Series variables from previous tool calls.
+    Vectors persist as save_as. Use execute_python_code("{save_as}.shape") to check dimensions.
 
     """
     if isinstance(parsed_loglines, (list, tuple)):
@@ -119,11 +118,6 @@ def _vectorize_log_data_impl(
     vectors = np.asarray(vec.transform(series))
 
     return vectors
-
-
-# ---------------------------------------------------------------------------
-# Encode categorical attributes
-# ---------------------------------------------------------------------------
 
 
 def _encode_log_attributes_impl(

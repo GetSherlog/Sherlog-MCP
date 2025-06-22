@@ -93,7 +93,6 @@ def load_files(codebase_path: str) -> list[tuple[str, str]]:
     except Exception as e:
         logger.error(f"Error loading files from {codebase_path}: {e}")
 
-    logger.info(f"Loaded {len(files)} code files from {codebase_path}")
     return files
 
 

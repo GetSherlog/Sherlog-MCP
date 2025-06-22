@@ -70,7 +70,6 @@ if _github_credentials_available():
 
         url = f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}"
 
-        logger.info(f"Fetching GitHub issue #{issue_number} from {owner}/{repo}")
         response = session.get(url)
 
         if not response.ok:
@@ -106,7 +105,6 @@ if _github_credentials_available():
                 response.raise_for_status()
 
         issue = response.json()
-        logger.info(f"Retrieved issue: {issue['title']}")
 
         issue_data = {
             "number": [issue["number"]],
@@ -147,7 +145,6 @@ if _github_credentials_available():
         try:
             session = _get_github_session()
 
-            logger.info("Testing GitHub API connection...")
             auth_response = session.get("https://api.github.com/user")
             rate_response = session.get("https://api.github.com/rate_limit")
 
@@ -242,6 +239,8 @@ if _github_credentials_available():
 
         Returns:
             pd.DataFrame: Issue details as a DataFrame
+            
+            Data persists as '{save_as}'. Use execute_python_code("{save_as}.iloc[0]") to view details.
 
         """
         code = f'{save_as} = get_issue_impl("{owner}", "{repo}", {issue_number})\n{save_as}'
@@ -308,12 +307,10 @@ if _github_credentials_available():
         if labels:
             params["labels"] = labels
 
-        logger.info(f"Searching GitHub issues in {owner}/{repo} with state={state}")
         response = session.get(url, params=params)
         response.raise_for_status()
 
         issues = response.json()
-        logger.info(f"Found {len(issues)} issues")
 
         if not issues:
             return pd.DataFrame(
@@ -395,6 +392,8 @@ if _github_credentials_available():
 
         Returns:
             pd.DataFrame: Search results as a DataFrame
+            
+            Results persist as '{save_as}'. Use list_dataframes() to see all data.
 
         """
         code = f'{save_as} = search_issues_impl("{owner}", "{repo}"'
@@ -428,12 +427,10 @@ if _github_credentials_available():
 
         url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pull_number}"
 
-        logger.info(f"Fetching GitHub pull request #{pull_number} from {owner}/{repo}")
         response = session.get(url)
         response.raise_for_status()
 
         pr = response.json()
-        logger.info(f"Retrieved pull request: {pr['title']}")
 
         pr_data = {
             "number": [pr["number"]],
@@ -549,14 +546,10 @@ if _github_credentials_available():
         if base:
             params["base"] = base
 
-        logger.info(
-            f"Listing GitHub pull requests in {owner}/{repo} with state={state}"
-        )
         response = session.get(url, params=params)
         response.raise_for_status()
 
         prs = response.json()
-        logger.info(f"Found {len(prs)} pull requests")
 
         if not prs:
             return pd.DataFrame(
@@ -676,14 +669,10 @@ if _github_credentials_available():
 
         url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pull_number}/files"
 
-        logger.info(
-            f"Fetching files for GitHub pull request #{pull_number} from {owner}/{repo}"
-        )
         response = session.get(url)
         response.raise_for_status()
 
         files = response.json()
-        logger.info(f"Retrieved {len(files)} files for pull request #{pull_number}")
 
         if not files:
             return pd.DataFrame(
@@ -760,16 +749,10 @@ if _github_credentials_available():
             f"https://api.github.com/repos/{owner}/{repo}/issues/{pull_number}/comments"
         )
 
-        logger.info(
-            f"Fetching comments for GitHub pull request #{pull_number} from {owner}/{repo}"
-        )
         response = session.get(url)
         response.raise_for_status()
 
         comments = response.json()
-        logger.info(
-            f"Retrieved {len(comments)} comments for pull request #{pull_number}"
-        )
 
         if not comments:
             return pd.DataFrame(
@@ -843,14 +826,10 @@ if _github_credentials_available():
 
         url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pull_number}/reviews"
 
-        logger.info(
-            f"Fetching reviews for GitHub pull request #{pull_number} from {owner}/{repo}"
-        )
         response = session.get(url)
         response.raise_for_status()
 
         reviews = response.json()
-        logger.info(f"Retrieved {len(reviews)} reviews for pull request #{pull_number}")
 
         if not reviews:
             return pd.DataFrame(
@@ -951,12 +930,10 @@ if _github_credentials_available():
         if until:
             params["until"] = until
 
-        logger.info(f"Listing GitHub commits in {owner}/{repo}")
         response = session.get(url, params=params)
         response.raise_for_status()
 
         commits = response.json()
-        logger.info(f"Retrieved {len(commits)} commits")
 
         if not commits:
             return pd.DataFrame(
@@ -1072,12 +1049,10 @@ if _github_credentials_available():
 
         url = f"https://api.github.com/repos/{owner}/{repo}/commits/{commit_sha}"
 
-        logger.info(f"Fetching commit details for {commit_sha} from {owner}/{repo}")
         response = session.get(url)
         response.raise_for_status()
 
         commit = response.json()
-        logger.info(f"Retrieved commit: {commit['commit']['message'][:50]}...")
 
         commit_data = commit["commit"]
         stats = commit.get("stats", {})
@@ -1136,11 +1111,6 @@ if _github_credentials_available():
         since_date = issue_created - timedelta(days=days_before)
         until_date = issue_created + timedelta(days=days_after)
 
-        logger.info(
-            f"Analyzing commits around issue #{issue_number} created on {issue_created}"
-        )
-        logger.info(f"Looking for commits between {since_date} and {until_date}")
-
         all_commits = []
 
         if file_paths:
@@ -1153,7 +1123,6 @@ if _github_credentials_available():
                     "per_page": 100,
                 }
 
-                logger.info(f"Fetching commits for file: {file_path}")
                 response = session.get(commits_url, params=params)
                 response.raise_for_status()
 
@@ -1188,7 +1157,6 @@ if _github_credentials_available():
                 "per_page": 100,
             }
 
-            logger.info("Fetching all commits in timeframe")
             response = session.get(commits_url, params=params)
             response.raise_for_status()
 
@@ -1215,8 +1183,6 @@ if _github_credentials_available():
                         "repo": repo,
                     }
                 )
-
-        logger.info(f"Found {len(all_commits)} commits around issue #{issue_number}")
 
         if not all_commits:
             return pd.DataFrame(

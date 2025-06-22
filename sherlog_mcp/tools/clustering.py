@@ -96,6 +96,9 @@ def _cluster_log_features_impl(
     - Uses LogAI's `Clustering` and `ClusteringConfig`. For "kmeans",
       `KMeansParams` is used, incorporating `n_clusters`.
     - Cluster IDs are returned as strings in the Series.
+    
+    Data parameters can be DataFrame variables from previous tool calls.
+    Results persist as save_as. Use execute_python_code("{save_as}.value_counts()") to see cluster sizes.
 
     """
     if isinstance(feature_vector, pd.DataFrame):

@@ -83,6 +83,10 @@ def _load_file_log_data_impl(
     pd.DataFrame
         An object containing the loaded and structured log data, including
         timestamps, loglines (body), and attributes.
+        
+        The loaded data persists as '{save_as}' in the session. You can:
+        - Use execute_python_code("{save_as}.head()") to explore
+        - Use list_dataframes() to see this and other available data
 
     Side Effects
     ------------
@@ -135,6 +139,9 @@ async def load_file_log_data(
     code = f"{save_as} = _load_file_log_data_impl({repr(file_path)}, {repr(dimensions)}, {repr(log_type)}, {repr(infer_datetime)}, {repr(datetime_format)})\n{save_as}"
     execution_result = await run_code_in_shell(code)
     return execution_result.result if execution_result else None
+
+
+load_file_log_data.__doc__ = _load_file_log_data_impl.__doc__
 
 
 def _default_dimension_mapping(cols: list[str]) -> pd.DataFrame:
@@ -212,6 +219,9 @@ async def suggest_dimension_mapping(
         A dictionary representing the suggested dimension mapping.
         Example: `{"timestamp": ["event_date"], "body": ["log_message"], "labels": ["severity_level"], "span_id": []}`.
         If no suitable columns are found for a dimension, its list will be empty.
+        
+        Results saved as '{save_as}' persist for future use.
+        Use execute_python_code() to modify, e.g. "{save_as}['body'] = ['different_column']"
 
     Side Effects
     ------------
