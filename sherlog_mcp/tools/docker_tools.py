@@ -178,10 +178,10 @@ if _docker_available():
         *,
         save_as: str,
     ) -> pd.DataFrame | None:
-        """Retrieve Docker logs and return a DRain-parsed structured DataFrame.
+        """Retrieve Docker logs and return a Drain-parsed structured DataFrame.
 
         This is a convenience wrapper that chains :pyfunc:`get_container_logs` with
-        LogAI's DRain parser so the caller gets structured output in one step.
+        LogAI's Drain parser so the caller gets structured output in one step.
 
         Args:
             container_id: The ID or name of the container.
