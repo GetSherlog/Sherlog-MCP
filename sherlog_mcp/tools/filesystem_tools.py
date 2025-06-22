@@ -390,7 +390,7 @@ if _filesystem_available():
     )
 
     @app.tool()
-    async def read_file(file_path: str, save_as: str) -> pd.DataFrame | None:
+    async def read_file(file_path: str, save_as: str) -> pd.DataFrame | None | dict[str, Any]:
         """Load a CSV file into a DataFrame stored as *save_as* in the shell.
         You can then use this DataFrame (defined by *save_as*) in subsequent steps.
         
@@ -400,6 +400,7 @@ if _filesystem_available():
             
         Returns:
             pd.DataFrame: The loaded CSV data
+            dict: If an error occurs, returns a dictionary with error details
             
         Examples
         --------
@@ -427,10 +428,36 @@ if _filesystem_available():
         """
         code = f'{save_as} = await _read_file_impl("{file_path}")'
         execution_result = await run_code_in_shell(code)
+        
+        if execution_result and (execution_result.error_before_exec or execution_result.error_in_exec):
+            error_info = {
+                "error": "Failed to read file",
+                "file_path": file_path
+            }
+            
+            if execution_result.error_before_exec:
+                error_info["error_detail"] = str(execution_result.error_before_exec)
+            elif execution_result.error_in_exec:
+                error_msg = str(execution_result.error_in_exec)
+                error_info["error_detail"] = error_msg
+                
+                if "PermissionError" in error_msg:
+                    error_info["error_type"] = "PermissionError"
+                    error_info["suggestion"] = (
+                        f"The file '{file_path}' is outside the allowed directories. "
+                        "Please use a file within the allowed directories. "
+                        "Use the 'list_allowed_directories' tool to see which directories are accessible."
+                    )
+                elif "FileNotFoundError" in error_msg:
+                    error_info["error_type"] = "FileNotFoundError"
+                    error_info["suggestion"] = f"The file '{file_path}' does not exist."
+                    
+            return error_info
+            
         return execution_result.result if execution_result else None
 
     @app.tool()
-    async def list_directory(dir_path: str, save_as: str) -> pd.DataFrame | None:
+    async def list_directory(dir_path: str, save_as: str) -> pd.DataFrame | None | dict[str, Any]:
         """Gets a detailed listing of all files and directories in a specified path.
 
         Args:
@@ -439,6 +466,7 @@ if _filesystem_available():
 
         Returns:
             A Pandas DataFrame with columns: 'name', 'type' ('file' or 'directory'), 'path'.
+            dict: If an error occurs, returns a dictionary with error details
             
         Examples
         --------
@@ -468,10 +496,39 @@ if _filesystem_available():
         """
         code = f'{save_as} = await _list_directory_impl("{dir_path}")\n{save_as}'
         execution_result = await run_code_in_shell(code)
+        
+        if execution_result and (execution_result.error_before_exec or execution_result.error_in_exec):
+            error_info = {
+                "error": "Failed to list directory",
+                "dir_path": dir_path
+            }
+            
+            if execution_result.error_before_exec:
+                error_info["error_detail"] = str(execution_result.error_before_exec)
+            elif execution_result.error_in_exec:
+                error_msg = str(execution_result.error_in_exec)
+                error_info["error_detail"] = error_msg
+                
+                if "PermissionError" in error_msg:
+                    error_info["error_type"] = "PermissionError"
+                    error_info["suggestion"] = (
+                        f"The directory '{dir_path}' is outside the allowed directories. "
+                        "Please use a directory within the allowed directories. "
+                        "Use the 'list_allowed_directories' tool to see which directories are accessible."
+                    )
+                elif "FileNotFoundError" in error_msg:
+                    error_info["error_type"] = "FileNotFoundError"
+                    error_info["suggestion"] = f"The directory '{dir_path}' does not exist."
+                elif "NotADirectoryError" in error_msg:
+                    error_info["error_type"] = "NotADirectoryError"
+                    error_info["suggestion"] = f"The path '{dir_path}' is not a directory."
+                    
+            return error_info
+            
         return execution_result.result if execution_result else None
 
     @app.tool()
-    async def directory_tree(path: str, save_as: str) -> pd.DataFrame | None:
+    async def directory_tree(path: str, save_as: str) -> pd.DataFrame | None | dict[str, Any]:
         """Gets a recursive tree view of files and directories as a JSON string.
 
         Args:
@@ -482,6 +539,7 @@ if _filesystem_available():
             str: A JSON string representing the directory tree.
             Each entry includes 'name', 'type' ('file'/'directory'/'inaccessible'/'error'),
             and 'children' for directories.
+            dict: If an error occurs, returns a dictionary with error details
             
         Examples
         --------
@@ -505,6 +563,35 @@ if _filesystem_available():
         """
         code = f'{save_as} = await _directory_tree_impl("{path}")\n{save_as}'
         execution_result = await run_code_in_shell(code)
+        
+        if execution_result and (execution_result.error_before_exec or execution_result.error_in_exec):
+            error_info = {
+                "error": "Failed to get directory tree",
+                "path": path
+            }
+            
+            if execution_result.error_before_exec:
+                error_info["error_detail"] = str(execution_result.error_before_exec)
+            elif execution_result.error_in_exec:
+                error_msg = str(execution_result.error_in_exec)
+                error_info["error_detail"] = error_msg
+                
+                if "PermissionError" in error_msg:
+                    error_info["error_type"] = "PermissionError"
+                    error_info["suggestion"] = (
+                        f"The path '{path}' is outside the allowed directories. "
+                        "Please use a path within the allowed directories. "
+                        "Use the 'list_allowed_directories' tool to see which directories are accessible."
+                    )
+                elif "FileNotFoundError" in error_msg:
+                    error_info["error_type"] = "FileNotFoundError"
+                    error_info["suggestion"] = f"The path '{path}' does not exist."
+                elif "NotADirectoryError" in error_msg:
+                    error_info["error_type"] = "NotADirectoryError"
+                    error_info["suggestion"] = f"The path '{path}' is not a directory."
+                    
+            return error_info
+            
         return execution_result.result if execution_result else None
 
     @app.tool()
@@ -514,7 +601,7 @@ if _filesystem_available():
         exclude_patterns: list[str],
         recursive: bool,
         save_as: str,
-    ) -> pd.DataFrame | None:
+    ) -> pd.DataFrame | None | dict[str, Any]:
         """Recursively searches for files and directories matching a pattern.
 
         Args:
@@ -527,6 +614,7 @@ if _filesystem_available():
         Returns:
             pd.DataFrame: DataFrame with a single column 'path' containing full paths to matching items.
             Returns an empty DataFrame if no matches are found.
+            dict: If an error occurs, returns a dictionary with error details
             
         Examples
         --------
@@ -553,10 +641,40 @@ if _filesystem_available():
         """
         code = f'{save_as} = await _search_files_impl("{path}", "{pattern}", "{exclude_patterns}", "{recursive}")\n{save_as}'
         execution_result = await run_code_in_shell(code)
+        
+        if execution_result and (execution_result.error_before_exec or execution_result.error_in_exec):
+            error_info = {
+                "error": "Failed to search files",
+                "path": path,
+                "pattern": pattern
+            }
+            
+            if execution_result.error_before_exec:
+                error_info["error_detail"] = str(execution_result.error_before_exec)
+            elif execution_result.error_in_exec:
+                error_msg = str(execution_result.error_in_exec)
+                error_info["error_detail"] = error_msg
+                
+                if "PermissionError" in error_msg:
+                    error_info["error_type"] = "PermissionError"
+                    error_info["suggestion"] = (
+                        f"The path '{path}' is outside the allowed directories. "
+                        "Please use a path within the allowed directories. "
+                        "Use the 'list_allowed_directories' tool to see which directories are accessible."
+                    )
+                elif "FileNotFoundError" in error_msg:
+                    error_info["error_type"] = "FileNotFoundError"
+                    error_info["suggestion"] = f"The path '{path}' does not exist."
+                elif "NotADirectoryError" in error_msg:
+                    error_info["error_type"] = "NotADirectoryError"
+                    error_info["suggestion"] = f"The path '{path}' is not a directory."
+                    
+            return error_info
+            
         return execution_result.result if execution_result else None
 
     @app.tool()
-    async def get_file_info(path: str, save_as: str) -> pd.DataFrame | None:
+    async def get_file_info(path: str, save_as: str) -> pd.DataFrame | None | dict[str, Any]:
         """Retrieves detailed metadata about a file or directory.
 
         Args:
@@ -568,6 +686,7 @@ if _filesystem_available():
             'name', 'path', 'type', 'size_bytes', 'created_timestamp',
             'modified_timestamp', 'accessed_timestamp', 'permissions_octal',
             'is_symlink', 'absolute_path', and 'symlink_target' (if applicable).
+            dict: If an error occurs, returns a dictionary with error details
             
         Examples
         --------
@@ -595,6 +714,32 @@ if _filesystem_available():
         """
         code = f'{save_as} = await _get_file_info_impl("{path}")\n{save_as}'
         execution_result = await run_code_in_shell(code)
+        
+        if execution_result and (execution_result.error_before_exec or execution_result.error_in_exec):
+            error_info = {
+                "error": "Failed to get file info",
+                "path": path
+            }
+            
+            if execution_result.error_before_exec:
+                error_info["error_detail"] = str(execution_result.error_before_exec)
+            elif execution_result.error_in_exec:
+                error_msg = str(execution_result.error_in_exec)
+                error_info["error_detail"] = error_msg
+                
+                if "PermissionError" in error_msg:
+                    error_info["error_type"] = "PermissionError"
+                    error_info["suggestion"] = (
+                        f"The path '{path}' is outside the allowed directories. "
+                        "Please use a path within the allowed directories. "
+                        "Use the 'list_allowed_directories' tool to see which directories are accessible."
+                    )
+                elif "FileNotFoundError" in error_msg:
+                    error_info["error_type"] = "FileNotFoundError"
+                    error_info["suggestion"] = f"The path '{path}' does not exist."
+                    
+            return error_info
+            
         return execution_result.result if execution_result else None
 
     @app.tool()
