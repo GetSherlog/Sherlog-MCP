@@ -14,7 +14,6 @@ from . import (
     filesystem_tools,
     github_tools,
     grafana_tools,
-    mixpanel_tools,
     preprocessing,
     s3_tools,
     vectorization,
@@ -33,7 +32,6 @@ __all__ = [
     "github_tools",
     "s3_tools",
     "code_retrieval",
-    "mixpanel_tools",
 ]
 
 try:
@@ -90,19 +88,6 @@ try:
         get_codebase_stats,
         list_all_classes,
         list_all_methods,
-    )
-except ImportError:
-    pass
-
-try:
-    from .mixpanel_tools import (
-        export_events,
-        list_event_names,
-        list_event_properties,
-        query_funnels,
-        query_insights,
-        query_people,
-        query_retention,
     )
 except ImportError:
     pass

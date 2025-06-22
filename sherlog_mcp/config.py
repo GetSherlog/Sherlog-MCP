@@ -104,18 +104,6 @@ class Settings(BaseSettings):  # type: ignore[misc]
         alias="AWS_SESSION_TOKEN",
     )
 
-    mixpanel_api_secret: str | None = Field(
-        default=None,
-        description="API secret for Mixpanel authentication.",
-        alias="MIXPANEL_API_SECRET",
-    )
-
-    mixpanel_host: str | None = Field(
-        default="https://mixpanel.com",
-        description="Base URL for the Mixpanel instance (e.g., https://mixpanel.com or https://eu.mixpanel.com)",
-        alias="MIXPANEL_HOST",
-    )
-
     codebase_path: str | None = Field(
         default=None,
         description="Path to the codebase directory for code retrieval tools.",

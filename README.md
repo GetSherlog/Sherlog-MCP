@@ -248,7 +248,6 @@ Our native tools are designed to work seamlessly with the DataFrame-centric arch
 - **AWS S3**: `s3_list_files`, `s3_download_file`, `s3_upload_file`
 - **GitHub**: `github_fetch_issues`, `github_fetch_pull_requests`, `github_fetch_commits`
 - **Grafana**: `grafana_query_prometheus`, `grafana_query_loki`
-- **Mixpanel**: `mixpanel_query_jql`, `mixpanel_get_events`
 
 #### Log Analysis (Powered by LogAI)
 - `detect_anomalies`: Time-series and semantic anomaly detection
