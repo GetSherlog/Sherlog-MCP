@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import uvicorn
 
 from sherlog_mcp.session import (
     app,  # noqa: F401 – side-effect: create singleton & basic tools
@@ -16,8 +17,6 @@ def main():
     """Main entry point for the MCP server"""
     logger.info("Starting Sherlog MCP Server...")
 
-    transport = os.getenv("MCP_TRANSPORT", "streamable-http")
-
     from sherlog_mcp.session import restore_session
 
     restore_session()
@@ -29,13 +28,14 @@ def main():
     except Exception as e:
         logger.error(f"Failed to register external MCPs: {e}")
 
-    logger.info(f"Starting Sherlog MCP server with transport: {transport}")
+    host = os.getenv("MCP_HOST", "0.0.0.0")
+    port = int(os.getenv("MCP_PORT", "8000"))
+    
+    logger.info(f"Starting Sherlog MCP server on {host}:{port}")
+    logger.info("Transport: streamable-http (stateful)")
+    http_app  = app.streamable_http_app()
 
-    if transport == "stdio":
-        app.run(transport="stdio")
-    else:
-        app.run(transport="streamable-http")
-
+    uvicorn.run(http_app, host=host, port=port)
 
 if __name__ == "__main__":
     main()

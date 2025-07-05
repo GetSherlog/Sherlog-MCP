@@ -10,18 +10,11 @@ authors = [
 # Core runtime dependencies for the server
 # These will be resolved into exact pins in uv.lock
 dependencies = [
-    "logai @ git+https://github.com/navneet-mkr/logai.git@main",
     "mcp>=1.9.4",
-    "fastmcp",
+    "fastmcp>=2.10.1",
     "pandas",
     "numpy",
-    "scikit-learn",
-    "nltk",
-    "Cython",
     "requests",
-    "scipy<1.12",
-    "gensim",
-    "docker",
     "polars",
     "pyarrow",
     "pydantic>=2.0,<3.0",
@@ -43,11 +36,9 @@ dependencies = [
     "seaborn",
     "plotly",
     "PyYAML",
-    "boto3",
     "tree-sitter",
     "tree-sitter-language-pack",
     "dill>=0.3.7",
-    "kubernetes",
     "pytest",
     "pytest-asyncio"
 ]

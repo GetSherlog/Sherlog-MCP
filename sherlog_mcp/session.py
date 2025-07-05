@@ -13,8 +13,6 @@ from pathlib import Path
 from typing import Any
 
 import dill
-import nltk
-import nltk.downloader
 import numpy as np
 import pandas as pd
 import polars as pl
@@ -88,7 +86,7 @@ def _enhanced_to_json(value, *, fallback=None, **kwargs):
 
 pydantic_core.to_json = _enhanced_to_json
 
-app = FastMCP(name="SherlogMCP", stateless_http=True)
+app = FastMCP(name="SherlogMCP")
 
 
 @app.custom_route("/health", methods=["GET"])
@@ -96,17 +94,6 @@ async def health_check(request):
     from starlette.responses import JSONResponse
 
     return JSONResponse({"status": "ok", "service": "Sherlog MCP"})
-
-
-for _resource in [
-    "tokenizers/punkt",
-    "corpora/wordnet",
-    "taggers/averaged_perceptron_tagger",
-]:
-    try:
-        nltk.data.find(_resource)
-    except LookupError:
-        nltk.download(_resource.split("/")[-1], quiet=True)
 
 session_vars: dict[str, Any] = {}
 session_meta: dict[str, dict[str, Any]] = {}

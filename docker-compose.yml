@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  sherlog-mcp:
+    image: sherlog-mcp
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - LOG_LEVEL=INFO
+    volumes:
+      - gh-config:/root/.config/gh
+      - aws-config:/root/.aws
+      - gcloud-config:/root/.config/gcloud
+      - mcp-data:/app/data
+
+volumes:
+  gh-config:
+  aws-config:
+  gcloud-config:
+  mcp-data:
