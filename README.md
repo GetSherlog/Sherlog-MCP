@@ -6,19 +6,20 @@ A powerful Model Context Protocol (MCP) server that provides a persistent IPytho
 
 Sherlog MCP Server transforms Claude Desktop into a stateful data analysis powerhouse by providing:
 
-- **Persistent IPython Shell**: A living workspace where all operations persist across tool calls
+- **Session-Aware IPython Shells**: Isolated workspaces per session with automatic persistence
 - **DataFrame-Centric Architecture**: Every operation returns DataFrames, creating a unified data model
-- **Shared Blackboard**: Perfect for multi-agent workflows where data needs to be passed between operations
+- **Multi-Session Support**: Handle up to 4 concurrent sessions with automatic lifecycle management
 - **MCP Proxy**: Seamlessly integrates any external MCP server, executing all operations within the same IPython context
 
-Think of it as giving Claude a persistent Python notebook that never forgets, where every piece of data is immediately available for the next operation.
+Think of it as giving Claude a persistent Python notebook that maintains separate workspaces for different conversations, where every piece of data is immediately available for the next operation.
 
 ## Key Features
 
-### 🐍 Persistent IPython Workspace
-- **Stateful Execution**: Variables, imports, and results persist across all tool calls
-- **Automatic Memory Management**: Smart cleanup after 50 operations to prevent bloat
-- **Session Preservation**: Workspace saves on shutdown and restores on startup
+### 🐍 Session-Based IPython Workspaces
+- **Isolated Sessions**: Each conversation gets its own IPython shell instance
+- **Automatic Persistence**: Sessions save to disk and restore automatically
+- **Smart Memory Management**: Auto-cleanup after configurable operations to prevent bloat
+- **LRU Eviction**: Automatically manages up to 4 concurrent sessions
 
 ### 📊 DataFrame-First Design
 - **Unified Data Model**: All tools return pandas/polars DataFrames
@@ -29,11 +30,6 @@ Think of it as giving Claude a persistent Python notebook that never forgets, wh
 - **Dynamic Tool Integration**: Connect any MCP server and use its tools within the IPython context
 - **Unified Namespace**: External tools' results become DataFrames in the shared workspace
 - **Zero Configuration**: Just add external MCPs to your environment
-
-### 📈 Built-in Analytics
-- **Log Analysis**: Powered by Salesforce's LogAI - anomaly detection, clustering, parsing
-- **Data Sources**: S3, local files, GitHub, Grafana, and more
-- **Processing Tools**: Feature extraction, vectorization, preprocessing pipelines
 
 ## Installation
 
@@ -66,6 +62,10 @@ Think of it as giving Claude a persistent Python notebook that never forgets, wh
 ```
 
 2. Restart Claude Desktop
+
+### Remote Connection Support
+
+Sherlog MCP supports connecting from remote Claude instances via HTTP transport. See [Remote Connection Guide](docs/remote-connection.md) for detailed setup instructions.
 
 ### Configuration with Environment Variables
 
@@ -157,9 +157,10 @@ The Docker configuration includes two types of mounts:
 
 ```bash
 # Session Management
-export MCP_AUTO_RESET_THRESHOLD=50      # Operations before auto-cleanup
+export MCP_AUTO_RESET_THRESHOLD=200     # Operations before auto-cleanup (default: 200)
 export MCP_AUTO_RESET_ENABLED=true      # Enable automatic memory management
 export MCP_MAX_OUTPUT_SIZE=50000        # Max output size per buffer (default: 50KB)
+export MCP_MAX_SESSIONS=4               # Maximum concurrent sessions (default: 4)
 
 # Logging
 export LOG_LEVEL=INFO
@@ -205,13 +206,14 @@ export EXTERNAL_MCPS_JSON='{
 
 ## Core Concepts
 
-### The IPython Workspace
+### Session-Based IPython Workspaces
 
-Every tool execution happens within a persistent IPython shell. This means:
+Each conversation gets its own isolated IPython shell:
 
-- **Variables Persist**: Create `df` in one tool call, use it in the next
-- **Imports Stay**: Import once, use everywhere
-- **State Accumulates**: Build complex analyses step by step
+- **Session Isolation**: Variables and state are separate between conversations
+- **Automatic Persistence**: Sessions save to disk and restore when you return
+- **Smart Lifecycle**: LRU eviction ensures efficient resource usage
+- **Context Awareness**: Tools automatically use the correct session's workspace
 
 ### DataFrame as Universal Currency
 
@@ -222,12 +224,14 @@ All tools follow a simple pattern:
 
 This creates a powerful chain of operations where each step builds on the last.
 
-### Multi-Agent Blackboard
+### Multi-Agent Collaboration
 
-In multi-agent scenarios, the IPython workspace acts as a shared blackboard:
+Within a session, the IPython workspace acts as a shared blackboard:
 - Agent A loads data → stores as `raw_data`
 - Agent B processes it → creates `processed_data`
 - Agent C analyzes results → uses both previous DataFrames
+
+Each session maintains its own blackboard, enabling parallel workflows.
 
 ## Available Tools
 
@@ -303,9 +307,11 @@ To see all available tools in your session:
 ```
 Claude Desktop
      ↓
-Sherlog MCP Server (stdio)
+Sherlog MCP Server (stdio/http)
      ↓
-IPython Shell (persistent workspace)
+Session Middleware (manages shells)
+     ↓
+IPython Shells (one per session)
      ├── Built-in Tools (return DataFrames)
      ├── External MCP Tools (via proxy)
      └── User Code (execute_python_code)
@@ -313,13 +319,14 @@ IPython Shell (persistent workspace)
 
 ## Advanced Usage
 
-### Session Memory Management
+### Session Management
 
-The server automatically manages memory to prevent bloat:
-- Monitors execution count
-- After 50 operations with DataFrames, triggers smart cleanup
-- Preserves imports and recent DataFrames
-- Configurable via environment variables
+The server provides sophisticated session handling:
+- **Isolated Workspaces**: Each session gets its own IPython shell
+- **Automatic Persistence**: Sessions save to `/app/data/sessions/` and restore on reconnect
+- **Resource Limits**: Maximum 4 concurrent sessions with LRU eviction
+- **Smart Memory Management**: Auto-cleanup after configurable operations
+- **Session Tools**: Monitor and manage sessions with `session_memory_status` and `reset_session_now`
 
 ### Working with External MCPs
 

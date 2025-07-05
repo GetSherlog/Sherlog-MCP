@@ -3,104 +3,94 @@ import io
 from typing import Any
 
 from IPython.core.interactiveshell import InteractiveShell
-from IPython.core.completer import IPCompleter
+from fastmcp import Context
 
 from sherlog_mcp.session import app
-
+import fnmatch
 import pandas as pd
 import polars as pl
+import os
+import sys
+import traceback
+import inspect
+import numpy as np
+from sherlog_mcp.dataframe_utils import to_json_serializable
 
-_SHELL: InteractiveShell = InteractiveShell.instance()
-_SHELL.reset()
-
-_SHELL.run_line_magic("load_ext", "autoreload")
-_SHELL.run_line_magic("autoreload", "2")
-
-_SHELL.Completer = IPCompleter(shell=_SHELL, use_jedi=False)
-
-def _df_column_matcher(text):
-    import re, pandas as pd
-    try:
-        m = re.match(r"(.+?)\['([^\]]*$)", text)
-        if not m:
-            return None
-        var, stub = m.groups()
-        if var in _SHELL.user_ns and isinstance(_SHELL.user_ns[var], pd.DataFrame):
-            cols = _SHELL.user_ns[var].columns.astype(str)
-            return [f"{var}['{c}']" for c in cols if c.startswith(stub)][:200]
-    except Exception:
-        return None
-
-_SHELL.Completer.custom_matchers.append(_df_column_matcher)
+def get_session_shell(session_id):
+    from sherlog_mcp.middleware.session_middleware import get_session_shell as _get_session_shell
+    return _get_session_shell(session_id)
 
 
 class SmartMemoryManager:
     """Automatically manages IPython session memory to prevent bloat."""
     
     def __init__(self):
-        import os
-        self.execution_count = 0
-        self.last_reset_count = 0
-        self.reset_threshold = int(os.getenv('MCP_AUTO_RESET_THRESHOLD', '200'))
-        self.auto_reset_enabled = os.getenv('MCP_AUTO_RESET_ENABLED', 'true').lower() == 'true'
+        from sherlog_mcp.config import get_settings
+        settings = get_settings()
+        self.execution_counts = {}  # session_id -> count
+        self.last_reset_counts = {}  # session_id -> count
+        self.reset_threshold = settings.auto_reset_threshold
+        self.auto_reset_enabled = settings.auto_reset_enabled
         
-    def should_reset(self) -> bool:
+    def should_reset(self, session_id: str, shell: InteractiveShell) -> bool:
         """Check if we should reset based on execution count and presence of DataFrames."""
-        self.execution_count += 1
+        if session_id not in self.execution_counts:
+            self.execution_counts[session_id] = 0
+            self.last_reset_counts[session_id] = 0
+            
+        self.execution_counts[session_id] += 1
         
         if not self.auto_reset_enabled:
             return False
         
-        executions_since_reset = self.execution_count - self.last_reset_count
+        executions_since_reset = self.execution_counts[session_id] - self.last_reset_counts[session_id]
         
         if executions_since_reset >= self.reset_threshold:
             has_dataframes = any(
                 isinstance(obj, (pd.DataFrame, pl.DataFrame)) 
-                for obj in _SHELL.user_ns.values()
+                for obj in shell.user_ns.values()
             )
             
             if has_dataframes:
-                self.last_reset_count = self.execution_count
+                self.last_reset_counts[session_id] = self.execution_counts[session_id]
                 return True
                 
         return False
     
-    def reset(self):
+    def reset(self, shell: InteractiveShell):
         """Smart reset - preserves imports and recent DataFrames."""
-        import pandas as pd
-        import polars as pl
         recent_dfs = {}
-        for name, obj in _SHELL.user_ns.items():
+        for name, obj in shell.user_ns.items():
             if isinstance(obj, (pd.DataFrame, pl.DataFrame)) and not name.startswith('_'):
                 if len(recent_dfs) < 3:
                     recent_dfs[name] = obj
         
-        imports = {k: v for k, v in _SHELL.user_ns.items() 
+        imports = {k: v for k, v in shell.user_ns.items() 
                    if hasattr(v, '__module__') and not k.startswith('_')}
         
-        _SHELL.reset()
+        shell.reset()
         
-        _SHELL.user_ns.update(imports)
-        _SHELL.user_ns.update(recent_dfs)
+        shell.user_ns.update(imports)
+        shell.user_ns.update(recent_dfs)
         
-        _SHELL.run_cell("import pandas as pd\nimport numpy as np\nimport polars as pl")
+        shell.run_cell("import pandas as pd\nimport numpy as np\nimport polars as pl")
 
 
 _SMART_MANAGER = SmartMemoryManager()
 
 
-async def run_code_in_shell(code: str):
-    """Execute *code* asynchronously in the shared IPython shell and return the ExecutionResult."""
-    if _SMART_MANAGER.should_reset():
-        _SMART_MANAGER.reset()
+async def run_code_in_shell(code: str, shell: InteractiveShell, session_id: str = "default"):
+    """Execute *code* asynchronously in the given IPython shell and return the ExecutionResult."""
+    if _SMART_MANAGER.should_reset(session_id, shell):
+        _SMART_MANAGER.reset(shell)
 
-    execution_result = await _SHELL.run_cell_async(code, silent=True)
+    execution_result = await shell.run_cell_async(code, silent=True)
 
     return execution_result
 
 
 @app.tool()
-async def execute_python_code(code: str):
+async def execute_python_code(code: str, ctx: Context):
     """Executes a given string of Python code in the underlying IPython interactive shell.
 
     Executes Python code in a persistent IPython session where all variables
@@ -156,15 +146,20 @@ async def execute_python_code(code: str):
     stdout_buffer = io.StringIO()
     stderr_buffer = io.StringIO()
 
-    import os
-    MAX_OUTPUT_SIZE = int(os.getenv('MCP_MAX_OUTPUT_SIZE', '50000'))
+    from sherlog_mcp.config import get_settings
+    settings = get_settings()
+    MAX_OUTPUT_SIZE = settings.max_output_size
 
     with (
         contextlib.redirect_stdout(stdout_buffer),
         contextlib.redirect_stderr(stderr_buffer),
     ):
         try:
-            result = await run_code_in_shell(code)
+            session_id = ctx.session_id or "default"
+            shell = get_session_shell(session_id)
+            if not shell:
+                raise RuntimeError(f"No shell found for session {session_id}")
+            result = await run_code_in_shell(code, shell, session_id)
         except Exception as e:
             result = None
 
@@ -180,7 +175,6 @@ async def execute_python_code(code: str):
 
     if result is not None:
         if not result.error_before_exec and not result.error_in_exec:
-            from sherlog_mcp.dataframe_utils import to_json_serializable
             execution_details_dict["result"] = to_json_serializable(result.result)
 
         if result.error_before_exec:
@@ -193,8 +187,6 @@ async def execute_python_code(code: str):
             execution_details_dict["error_in_exec"] = f"{error_type}: {error_msg}"
             execution_details_dict["success"] = False
             try:
-                import sys
-                import traceback
                 if sys.exc_info()[0] is not None:
                     tb_lines = traceback.format_exc()
                     execution_details_dict["traceback"] = tb_lines[:8192]
@@ -213,7 +205,7 @@ async def execute_python_code(code: str):
 
 
 @app.tool()
-async def list_shell_variables() -> list[str]:
+async def list_shell_variables(ctx: Context) -> list[str]:
     """Lists variable names in the current IPython user namespace.
 
     Tries to exclude common IPython internal variables (e.g., 'In', 'Out', 'exit', 'quit', 'get_ipython')
@@ -241,10 +233,12 @@ async def list_shell_variables() -> list[str]:
         "_ip",
     }
 
-    if _SHELL.user_ns is None:
+    session_id = ctx.session_id or "default"
+    shell = get_session_shell(session_id)
+    if not shell or shell.user_ns is None:
         return []
 
-    for name in _SHELL.user_ns.keys():
+    for name in shell.user_ns.keys():
         if name in system_variables:
             continue
         if (
@@ -258,7 +252,7 @@ async def list_shell_variables() -> list[str]:
 
 
 @app.tool()
-async def inspect_shell_object(object_name: str, detail_level: int = 0) -> str:
+async def inspect_shell_object(object_name: str, ctx: Context, detail_level: int = 0) -> str:
     """Provides detailed information about an object in the IPython shell by its name.
     Uses IPython's object inspector.
 
@@ -280,17 +274,19 @@ async def inspect_shell_object(object_name: str, detail_level: int = 0) -> str:
         Returns an error message if the object is not found or if an error occurs during inspection.
 
     """
-    if _SHELL.user_ns is None or object_name not in _SHELL.user_ns:
+    session_id = ctx.session_id or "default"
+    shell = get_session_shell(session_id)
+    if not shell or shell.user_ns is None or object_name not in shell.user_ns:
         return f"Error: Object '{object_name}' not found in the shell namespace."
     try:
         actual_detail_level = min(max(detail_level, 0), 2)
-        return _SHELL.object_inspect_text(object_name, detail_level=actual_detail_level)
+        return shell.object_inspect_text(object_name, detail_level=actual_detail_level)
     except Exception as e:
         return f"Error during inspection of '{object_name}': {str(e)}"
 
 
 @app.tool()
-async def get_shell_history(range_str: str = "", raw: bool = False) -> str:
+async def get_shell_history(ctx: Context, range_str: str = "", raw: bool = False) -> str:
     """Retrieves lines from the IPython shell's input history.
 
     Uses IPython's `extract_input_lines` method. The `range_str` defines which lines to retrieve.
@@ -318,14 +314,18 @@ async def get_shell_history(range_str: str = "", raw: bool = False) -> str:
 
     """
     try:
-        history_lines = _SHELL.extract_input_lines(range_str=range_str, raw=raw)
+        session_id = ctx.session_id or "default"
+        shell = get_session_shell(session_id)
+        if not shell:
+            return "Error: No shell found for session"
+        history_lines = shell.extract_input_lines(range_str=range_str, raw=raw)
         return history_lines
     except Exception as e:
         return f"Error retrieving shell history for range '{range_str}' (raw={raw}): {str(e)}"
 
 
 @app.tool()
-async def run_shell_magic(magic_name: str, line: str, cell: str | None = None):
+async def run_shell_magic(magic_name: str, line: str, ctx: Context, cell: str | None = None):
     """Executes an IPython magic command in the shell.
 
     Allows execution of both line magics (e.g., %ls -l) and cell magics (e.g., %%timeit code...).
@@ -363,16 +363,24 @@ async def run_shell_magic(magic_name: str, line: str, cell: str | None = None):
     """
     try:
         if cell is not None and cell.strip() != "":
-            return _SHELL.run_cell_magic(magic_name, line, cell)
+            session_id = ctx.session_id or "default"
+            shell = get_session_shell(session_id)
+            if not shell:
+                return "Error: No shell found for session"
+            return shell.run_cell_magic(magic_name, line, cell)
         else:
-            return _SHELL.run_line_magic(magic_name, line)
+            session_id = ctx.session_id or "default"
+            shell = get_session_shell(session_id)
+            if not shell:
+                return "Error: No shell found for session"
+            return shell.run_line_magic(magic_name, line)
     except Exception as e:
         error_type = type(e).__name__
         return f"Error executing magic command '{magic_name}' (line='{line}', cell present: {cell is not None}): {error_type}: {str(e)}"
 
 
 @app.tool()
-async def install_package(package_spec: str, upgrade: bool = False):
+async def install_package(package_spec: str, ctx: Context, upgrade: bool = False):
     """Installs a Python package using uv within the IPython shell session.
 
     This tool allows the LLM to install packages dynamically using IPython's magic commands.
@@ -424,7 +432,15 @@ async def install_package(package_spec: str, upgrade: bool = False):
 
         pip_command_line = " ".join(pip_args)
 
-        magic_result = _SHELL.run_line_magic("pip", f"install {pip_command_line}")
+        session_id = ctx.session_id or "default"
+        shell = get_session_shell(session_id)
+        if not shell:
+            return {
+                "success": False,
+                "output": "Error: No shell found for session",
+                "packages_requested": package_spec.split(),
+            }
+        magic_result = shell.run_line_magic("pip", f"install {pip_command_line}")
 
         packages_requested = []
         for pkg in package_spec.split():
@@ -466,7 +482,7 @@ async def install_package(package_spec: str, upgrade: bool = False):
 
 
 @app.tool()
-async def get_completions(text: str, cursor_pos: int | None = None) -> dict[str, Any]:
+async def get_completions(text: str, ctx: Context, cursor_pos: int | None = None) -> dict[str, Any]:
     """Get code completions at cursor position to help LLM understand available methods/attributes.
 
     This tool provides intelligent code completion suggestions that can help the LLM
@@ -501,7 +517,18 @@ async def get_completions(text: str, cursor_pos: int | None = None) -> dict[str,
         if cursor_pos is None:
             cursor_pos = len(text)
 
-        completed_text, matches = _SHELL.complete(text, cursor_pos=cursor_pos)
+        session_id = ctx.session_id or "default"
+        shell = get_session_shell(session_id)
+        if not shell:
+            return {
+                "text": "",
+                "matches": [],
+                "cursor_start": cursor_pos or 0,
+                "cursor_end": cursor_pos or 0,
+                "total_matches": 0,
+                "error": "No shell found for session",
+            }
+        completed_text, matches = shell.complete(text, cursor_pos=cursor_pos)
 
         if not isinstance(completed_text, str):
             completed_text = str(completed_text) if completed_text is not None else ""
@@ -531,7 +558,7 @@ async def get_completions(text: str, cursor_pos: int | None = None) -> dict[str,
 
 
 @app.tool()
-async def get_function_signature(func_name: str) -> dict[str, Any]:
+async def get_function_signature(func_name: str, ctx: Context) -> dict[str, Any]:
     """Get function signature and docstring to help LLM generate correct function calls.
 
     This tool provides detailed information about function signatures, parameters,
@@ -562,7 +589,11 @@ async def get_function_signature(func_name: str) -> dict[str, Any]:
 
     """
     try:
-        info = _SHELL.object_inspect(func_name, detail_level=1)
+        session_id = ctx.session_id or "default"
+        shell = get_session_shell(session_id)
+        if not shell:
+            return {"error": "No shell found for session"}
+        info = shell.object_inspect(func_name, detail_level=1)
 
         if not info:
             return {"error": f"Object '{func_name}' not found"}
@@ -583,7 +614,7 @@ async def get_function_signature(func_name: str) -> dict[str, Any]:
 
 
 @app.tool()
-async def get_namespace_info() -> dict[str, Any]:
+async def get_namespace_info(ctx: Context) -> dict[str, Any]:
     """Get information about current namespaces to help LLM understand scope.
 
     This tool provides insight into what variables, functions, and objects are
@@ -620,8 +651,13 @@ async def get_namespace_info() -> dict[str, Any]:
             "_ip",
         }
 
-        if _SHELL.user_ns:
-            for name in _SHELL.user_ns.keys():
+        session_id = ctx.session_id or "default"
+        shell = get_session_shell(session_id)
+        if not shell:
+            return {"error": "No shell found for session"}
+            
+        if shell.user_ns:
+            for name in shell.user_ns.keys():
                 if name in system_variables:
                     continue
                 if (
@@ -653,8 +689,8 @@ async def get_namespace_info() -> dict[str, Any]:
             ]
 
         imported_modules = []
-        if _SHELL.user_ns:
-            for name, obj in _SHELL.user_ns.items():
+        if shell.user_ns:
+            for name, obj in shell.user_ns.items():
                 if hasattr(obj, "__file__") and hasattr(obj, "__name__"):
                     if not name.startswith("_"):
                         imported_modules.append(name)
@@ -670,7 +706,7 @@ async def get_namespace_info() -> dict[str, Any]:
 
 
 @app.tool()
-async def get_object_source(object_name: str) -> dict[str, Any]:
+async def get_object_source(object_name: str, ctx: Context) -> dict[str, Any]:
     """Get source code of functions/classes to help LLM understand implementation patterns.
 
     This tool retrieves the actual source code of functions, methods, and classes,
@@ -697,7 +733,11 @@ async def get_object_source(object_name: str) -> dict[str, Any]:
 
     """
     try:
-        info = _SHELL.object_inspect(object_name, detail_level=2)
+        session_id = ctx.session_id or "default"
+        shell = get_session_shell(session_id)
+        if not shell:
+            return {"error": "No shell found for session"}
+        info = shell.object_inspect(object_name, detail_level=2)
 
         if not info:
             return {"error": f"Object '{object_name}' not found"}
@@ -716,7 +756,7 @@ async def get_object_source(object_name: str) -> dict[str, Any]:
 
 @app.tool()
 async def list_object_attributes(
-    object_name: str, pattern: str = "*", include_private: bool = False
+    object_name: str, ctx: Context, pattern: str = "*", include_private: bool = False
 ) -> dict[str, Any]:
     """List all attributes matching pattern to help LLM discover available methods.
 
@@ -748,14 +788,17 @@ async def list_object_attributes(
 
     """
     try:
-        if object_name not in _SHELL.user_ns:
+        session_id = ctx.session_id or "default"
+        shell = get_session_shell(session_id)
+        if not shell:
+            return {"error": "No shell found for session"}
+            
+        if object_name not in shell.user_ns:
             return {"error": f"Object '{object_name}' not found in namespace"}
 
-        obj = _SHELL.user_ns[object_name]
+        obj = shell.user_ns[object_name]
 
         all_attrs = dir(obj)
-
-        import fnmatch
 
         filtered_attrs = []
         for attr in all_attrs:
@@ -794,7 +837,7 @@ async def list_object_attributes(
 
 
 @app.tool()
-async def get_docstring(object_name: str) -> dict[str, Any]:
+async def get_docstring(object_name: str, ctx: Context) -> dict[str, Any]:
     """Get just the docstring - lighter than full inspection for understanding APIs.
 
     This tool provides a lightweight way to get documentation for objects
@@ -819,7 +862,11 @@ async def get_docstring(object_name: str) -> dict[str, Any]:
 
     """
     try:
-        info = _SHELL.object_inspect(object_name, detail_level=1)
+        session_id = ctx.session_id or "default"
+        shell = get_session_shell(session_id)
+        if not shell:
+            return {"error": "No shell found for session"}
+        info = shell.object_inspect(object_name, detail_level=1)
 
         if not info:
             return {"error": f"Object '{object_name}' not found"}
@@ -837,7 +884,7 @@ async def get_docstring(object_name: str) -> dict[str, Any]:
 
 
 @app.tool()
-async def get_last_exception_info() -> dict[str, Any]:
+async def get_last_exception_info(ctx: Context) -> dict[str, Any]:
     """Get detailed info about last exception to help LLM debug and fix code.
 
     This tool provides comprehensive information about the most recent exception,
@@ -859,7 +906,11 @@ async def get_last_exception_info() -> dict[str, Any]:
 
     """
     try:
-        exception_only = _SHELL.get_exception_only()
+        session_id = ctx.session_id or "default"
+        shell = get_session_shell(session_id)
+        if not shell:
+            return {"has_exception": False, "error": "No shell found for session"}
+        exception_only = shell.get_exception_only()
 
         if not exception_only or exception_only.strip() == "":
             return {"has_exception": False, "message": "No recent exception found"}
@@ -958,7 +1009,7 @@ async def analyze_syntax_error(code: str) -> dict[str, Any]:
 
 
 @app.tool()
-async def check_code_completeness(code: str) -> dict[str, Any]:
+async def check_code_completeness(code: str, ctx: Context) -> dict[str, Any]:
     """Check if code block is complete to help LLM know when to continue vs execute.
 
     This tool determines whether a code block is syntactically complete and ready
@@ -988,7 +1039,17 @@ async def check_code_completeness(code: str) -> dict[str, Any]:
 
     """
     try:
-        status, indent = _SHELL.check_complete(code)
+        session_id = ctx.session_id or "default"
+        shell = get_session_shell(session_id)
+        if not shell:
+            return {
+                "status": "error",
+                "indent": "",
+                "needs_more": False,
+                "reason": "No shell found for session",
+                "error": "No shell found for session",
+            }
+        status, indent = shell.check_complete(code)
 
         needs_more = status == "incomplete"
 
@@ -1016,7 +1077,7 @@ async def check_code_completeness(code: str) -> dict[str, Any]:
 
 
 @app.tool()
-async def list_available_magics() -> dict[str, Any]:
+async def list_available_magics(ctx: Context) -> dict[str, Any]:
     """List all available magic commands to help LLM discover IPython capabilities.
 
     This tool provides a comprehensive list of available IPython magic commands,
@@ -1038,8 +1099,12 @@ async def list_available_magics() -> dict[str, Any]:
 
     """
     try:
-        line_magics = sorted(_SHELL.magics_manager.magics["line"].keys())
-        cell_magics = sorted(_SHELL.magics_manager.magics["cell"].keys())
+        session_id = ctx.session_id or "default"
+        shell = get_session_shell(session_id)
+        if not shell:
+            return {"error": "No shell found for session"}
+        line_magics = sorted(shell.magics_manager.magics["line"].keys())
+        cell_magics = sorted(shell.magics_manager.magics["cell"].keys())
 
         return {
             "line_magics": line_magics,
@@ -1053,7 +1118,7 @@ async def list_available_magics() -> dict[str, Any]:
 
 
 @app.tool()
-async def get_magic_help(magic_name: str, magic_type: str = "line") -> dict[str, Any]:
+async def get_magic_help(magic_name: str, ctx: Context, magic_type: str = "line") -> dict[str, Any]:
     """Get help for specific magic command to help LLM use magics correctly.
 
     This tool provides detailed documentation for specific magic commands,
@@ -1082,12 +1147,21 @@ async def get_magic_help(magic_name: str, magic_type: str = "line") -> dict[str,
 
     """
     try:
+        session_id = ctx.session_id or "default"
+        shell = get_session_shell(session_id)
+        if not shell:
+            return {
+                "exists": False,
+                "error": "No shell found for session",
+                "magic_type": magic_type,
+                "magic_name": magic_name,
+            }
         if magic_type == "line":
-            magic_func = _SHELL.find_line_magic(magic_name)
+            magic_func = shell.find_line_magic(magic_name)
         elif magic_type == "cell":
-            magic_func = _SHELL.find_cell_magic(magic_name)
+            magic_func = shell.find_cell_magic(magic_name)
         else:
-            magic_func = _SHELL.find_magic(magic_name)
+            magic_func = shell.find_magic(magic_name)
 
         if not magic_func:
             return {
@@ -1118,7 +1192,7 @@ async def get_magic_help(magic_name: str, magic_type: str = "line") -> dict[str,
 
 
 @app.tool()
-async def list_dataframes() -> list[dict]:
+async def list_dataframes(ctx: Context) -> list[dict]:
     """List all DataFrame variables with their shapes and memory usage.
     
     Returns lightweight metadata about DataFrames in the session.
@@ -1129,11 +1203,14 @@ async def list_dataframes() -> list[dict]:
     list[dict]
         Each dict contains: name, type (pandas/polars), rows, columns, memory_mb
     """
-    import pandas as pd
-    import polars as pl
+    
+    session_id = ctx.session_id or "default"
+    shell = get_session_shell(session_id)
+    if not shell:
+        return []
     
     dataframes = []
-    for name, obj in _SHELL.user_ns.items():
+    for name, obj in shell.user_ns.items():
         if isinstance(obj, (pd.DataFrame, pl.DataFrame)) and not name.startswith('_'):
             df_info = {
                 "name": name,
@@ -1151,16 +1228,29 @@ async def list_dataframes() -> list[dict]:
 
 
 @app.tool()
-async def session_memory_status() -> dict:
+async def session_memory_status(ctx: Context) -> dict:
     """Get current session memory management status.
     
     Shows execution count, DataFrames in memory, and when auto-reset will occur.
     """
-    import pandas as pd
-    import polars as pl
+    
+    session_id = ctx.session_id or "default"
+    shell = get_session_shell(session_id)
+    if not shell:
+        return {
+            "error": "No shell found for session",
+            "auto_reset_enabled": False,
+            "total_executions": 0,
+            "executions_since_reset": 0,
+            "executions_until_reset": 0,
+            "auto_reset_threshold": 0,
+            "dataframes_count": 0,
+            "dataframes": [],
+            "will_reset_on_next": False
+        }
     
     dataframes = []
-    for name, obj in _SHELL.user_ns.items():
+    for name, obj in shell.user_ns.items():
         if isinstance(obj, (pd.DataFrame, pl.DataFrame)) and not name.startswith('_'):
             df_info = {
                 "name": name,
@@ -1171,12 +1261,12 @@ async def session_memory_status() -> dict:
                 df_info["memory_mb"] = round(obj.memory_usage(deep=True).sum() / (1024 * 1024), 2)
             dataframes.append(df_info)
     
-    executions_since_reset = _SMART_MANAGER.execution_count - _SMART_MANAGER.last_reset_count
+    executions_since_reset = _SMART_MANAGER.execution_counts.get(session_id, 0) - _SMART_MANAGER.last_reset_counts.get(session_id, 0)
     executions_until_reset = _SMART_MANAGER.reset_threshold - executions_since_reset
     
     return {
         "auto_reset_enabled": _SMART_MANAGER.auto_reset_enabled,
-        "total_executions": _SMART_MANAGER.execution_count,
+        "total_executions": _SMART_MANAGER.execution_counts.get(session_id, 0),
         "executions_since_reset": executions_since_reset,
         "executions_until_reset": max(0, executions_until_reset),
         "auto_reset_threshold": _SMART_MANAGER.reset_threshold,
@@ -1187,12 +1277,19 @@ async def session_memory_status() -> dict:
 
 
 @app.tool()
-async def reset_session_now() -> dict:
+async def reset_session_now(ctx: Context) -> dict:
     """Manually trigger a session reset.
     
     This will clear most variables but preserve imports and recent DataFrames.
     """
-    _SMART_MANAGER.reset()
+    session_id = ctx.session_id or "default"
+    shell = get_session_shell(session_id)
+    if not shell:
+        return {
+            "status": "Error",
+            "message": "No shell found for session"
+        }
+    _SMART_MANAGER.reset(shell)
     return {
         "status": "Session reset complete",
         "message": "Imports and recent DataFrames preserved"
@@ -1200,14 +1297,17 @@ async def reset_session_now() -> dict:
 
 
 @app.tool()
-async def describe_object(name: str, sample: int = 5) -> dict:
+async def describe_object(name: str, ctx: Context, sample: int = 5) -> dict:
     """Get structured summary of objects to avoid payload bloat."""
-    ns = _SHELL.user_ns
+    session_id = ctx.session_id or "default"
+    shell = get_session_shell(session_id)
+    if not shell:
+        return {"error": "No shell found for session"}
+    ns = shell.user_ns
     if name not in ns:
         return {"error": f"{name} not in namespace"}
 
     obj = ns[name]
-    import pandas as pd, polars as pl, numpy as np, inspect
 
     if isinstance(obj, pd.DataFrame):
         return {

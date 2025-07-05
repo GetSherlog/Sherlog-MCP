@@ -16,9 +16,6 @@ COPY sherlog_mcp_server.py ./
 
 RUN uv pip install --system .
 
-# Download NLTK data during build to avoid runtime issues
-RUN python -m nltk.downloader punkt wordnet averaged_perceptron_tagger
-
 FROM python:3.11-slim-bookworm AS runtime
 
 RUN apt-get update \
@@ -28,10 +25,10 @@ RUN apt-get update \
         curl \
         nodejs \
         npm \
+        gh \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local /usr/local
-COPY --from=builder /root/nltk_data /root/nltk_data
 
 WORKDIR /app
 COPY sherlog_mcp ./sherlog_mcp
