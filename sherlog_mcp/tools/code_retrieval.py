@@ -497,10 +497,15 @@ async def find_method_implementation(
     >>> execute_python_code("method_results.to_csv('methods_found.csv', index=False)")
 
     """
+    settings = get_settings()
+    codebase_path = settings.codebase_path
+    if not codebase_path:
+        raise ValueError("CODEBASE_PATH environment variable is not set. Please configure it to use code retrieval tools.")
+    
     if class_name:
-        code = f'{save_as} = _find_method_implementation_impl("{method_name}", "{class_name}")\n{save_as}'
+        code = f'{save_as} = _find_method_implementation_impl("{method_name}", "{codebase_path}", "{class_name}")\n{save_as}'
     else:
-        code = f'{save_as} = _find_method_implementation_impl("{method_name}")\n{save_as}'
+        code = f'{save_as} = _find_method_implementation_impl("{method_name}", "{codebase_path}")\n{save_as}'
     session_id = ctx.session_id or "default"
     shell = get_session_shell(session_id)
     if not shell:
@@ -541,7 +546,12 @@ async def find_class_implementation(
     >>> execute_python_code("print(class_results.iloc[0]['implementation'][:500])")
 
     """
-    code = f'{save_as} = _find_class_implementation_impl("{class_name}")\n{save_as}'
+    settings = get_settings()
+    codebase_path = settings.codebase_path
+    if not codebase_path:
+        raise ValueError("CODEBASE_PATH environment variable is not set. Please configure it to use code retrieval tools.")
+    
+    code = f'{save_as} = _find_class_implementation_impl("{class_name}", "{codebase_path}")\n{save_as}'
     session_id = ctx.session_id or "default"
     shell = get_session_shell(session_id)
     if not shell:
@@ -550,11 +560,10 @@ async def find_class_implementation(
     return return_result(code, execution_result, class_name, save_as)
 
 @app.tool()
-async def list_all_methods(codebase_path: str, *, save_as: str = "all_methods", ctx: Context) -> dict:
+async def list_all_methods(*, save_as: str = "all_methods", ctx: Context) -> dict:
     """List all methods in the configured programming languages.
 
     Args:
-        codebase_path: The path to the codebase to list methods from
         save_as: Variable name to save results in IPython shell
 
     Returns:
@@ -583,6 +592,11 @@ async def list_all_methods(codebase_path: str, *, save_as: str = "all_methods", 
     >>> execute_python_code("all_methods['class_name'].unique()")
 
     """
+    settings = get_settings()
+    codebase_path = settings.codebase_path
+    if not codebase_path:
+        raise ValueError("CODEBASE_PATH environment variable is not set. Please configure it to use code retrieval tools.")
+    
     code = f"{save_as} = _list_all_methods_impl(\"{codebase_path}\")\n{save_as}"
     session_id = ctx.session_id or "default"
     shell = get_session_shell(session_id)
@@ -592,11 +606,10 @@ async def list_all_methods(codebase_path: str, *, save_as: str = "all_methods", 
     return return_result(code, execution_result, "list_all_methods", save_as)
 
 @app.tool()
-async def list_all_classes(codebase_path: str, *, save_as: str = "all_classes", ctx: Context) -> dict:
+async def list_all_classes(*, save_as: str = "all_classes", ctx: Context) -> dict:
     """List all classes in the configured programming languages.
 
     Args:
-        codebase_path: The path to the codebase to list classes from
         save_as: Variable name to save results in IPython shell
 
     Returns:
@@ -622,6 +635,11 @@ async def list_all_classes(codebase_path: str, *, save_as: str = "all_classes", 
     >>> execute_python_code("all_classes[all_classes['class_name'].str.endswith('Service')]")
 
     """
+    settings = get_settings()
+    codebase_path = settings.codebase_path
+    if not codebase_path:
+        raise ValueError("CODEBASE_PATH environment variable is not set. Please configure it to use code retrieval tools.")
+    
     code = f"{save_as} = _list_all_classes_impl(\"{codebase_path}\")\n{save_as}"
     session_id = ctx.session_id or "default"
     shell = get_session_shell(session_id)
@@ -632,19 +650,22 @@ async def list_all_classes(codebase_path: str, *, save_as: str = "all_classes", 
 
 @app.tool()
 async def get_codebase_stats(
-    codebase_path: str,
     *, save_as: str = "codebase_stats", ctx: Context
 ) -> dict:
     """Get statistics about the configured codebase.
 
     Args:
-        codebase_path: The path to the codebase to get statistics from
         save_as: Variable name to save results in IPython shell
 
     Returns:
         dict: Response with codebase statistics
 
     """
+    settings = get_settings()
+    codebase_path = settings.codebase_path
+    if not codebase_path:
+        raise ValueError("CODEBASE_PATH environment variable is not set. Please configure it to use code retrieval tools.")
+    
     code = f"{save_as} = _get_codebase_stats_impl(\"{codebase_path}\")\n{save_as}"
 
     session_id = ctx.session_id or "default"

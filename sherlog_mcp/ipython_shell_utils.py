@@ -25,10 +25,12 @@ class SmartMemoryManager:
     """Automatically manages IPython session memory to prevent bloat."""
     
     def __init__(self):
+        from sherlog_mcp.config import get_settings
+        settings = get_settings()
         self.execution_counts = {}  # session_id -> count
         self.last_reset_counts = {}  # session_id -> count
-        self.reset_threshold = int(os.getenv('MCP_AUTO_RESET_THRESHOLD', '200'))
-        self.auto_reset_enabled = os.getenv('MCP_AUTO_RESET_ENABLED', 'true').lower() == 'true'
+        self.reset_threshold = settings.auto_reset_threshold
+        self.auto_reset_enabled = settings.auto_reset_enabled
         
     def should_reset(self, session_id: str, shell: InteractiveShell) -> bool:
         """Check if we should reset based on execution count and presence of DataFrames."""
@@ -144,7 +146,9 @@ async def execute_python_code(code: str, ctx: Context):
     stdout_buffer = io.StringIO()
     stderr_buffer = io.StringIO()
 
-    MAX_OUTPUT_SIZE = int(os.getenv('MCP_MAX_OUTPUT_SIZE', '50000'))
+    from sherlog_mcp.config import get_settings
+    settings = get_settings()
+    MAX_OUTPUT_SIZE = settings.max_output_size
 
     with (
         contextlib.redirect_stdout(stdout_buffer),

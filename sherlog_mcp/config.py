@@ -16,92 +16,32 @@ class Settings(BaseSettings):  # type: ignore[misc]
 
     log_level: str = Field(
         default="INFO",
-        description="Root logging level for the LogAI-MCP server.",
-        alias="LOGAI_MCP_LOG_LEVEL",
+        description="Root logging level for the MCP server.",
+        alias="LOG_LEVEL",
     )
 
-    data_directory: str = Field(
-        default="data",
-        description="Default directory where data files are stored/read.",
-        alias="LOGAI_MCP_DATA_DIR",
+    max_sessions: int = Field(
+        default=4,
+        description="Maximum number of concurrent sessions to maintain.",
+        alias="MCP_MAX_SESSIONS",
     )
 
-    confluence_url: str | None = Field(
-        default=None,
-        description="Base URL for the Confluence instance (e.g., https://your-company.atlassian.net/wiki)",
-        alias="CONFLUENCE_URL",
+    auto_reset_threshold: int = Field(
+        default=200,
+        description="Number of operations before automatic memory cleanup.",
+        alias="MCP_AUTO_RESET_THRESHOLD",
     )
 
-    confluence_username: str | None = Field(
-        default=None,
-        description="Username/email used for Confluence API authentication.",
-        alias="CONFLUENCE_USERNAME",
+    auto_reset_enabled: bool = Field(
+        default=True,
+        description="Enable automatic memory management for sessions.",
+        alias="MCP_AUTO_RESET_ENABLED",
     )
 
-    confluence_api_token: str | None = Field(
-        default=None,
-        description="API token for Confluence.",
-        alias="CONFLUENCE_API_TOKEN",
-    )
-
-    jira_url: str | None = Field(
-        default=None,
-        description="Base URL for the Jira instance (e.g., https://your-company.atlassian.net)",
-        alias="JIRA_URL",
-    )
-
-    jira_username: str | None = Field(
-        default=None,
-        description="Username/email used for Jira API authentication.",
-        alias="JIRA_USERNAME",
-    )
-
-    jira_api_token: str | None = Field(
-        default=None,
-        description="API token for Jira.",
-        alias="JIRA_API_TOKEN",
-    )
-
-    github_pat_token: str | None = Field(
-        default=None,
-        description="Personal Access Token for GitHub API authentication.",
-        alias="GITHUB_PAT_TOKEN",
-    )
-
-    grafana_url: str | None = Field(
-        default=None,
-        description="Base URL for the Grafana instance (e.g., http://localhost:3000)",
-        alias="GRAFANA_URL",
-    )
-
-    grafana_api_key: str | None = Field(
-        default=None,
-        description="API key for Grafana authentication.",
-        alias="GRAFANA_API_KEY",
-    )
-
-    aws_access_key_id: str | None = Field(
-        default=None,
-        description="AWS Access Key ID for S3 authentication.",
-        alias="AWS_ACCESS_KEY_ID",
-    )
-
-    aws_secret_access_key: str | None = Field(
-        default=None,
-        description="AWS Secret Access Key for S3 authentication.",
-        alias="AWS_SECRET_ACCESS_KEY",
-    )
-
-    aws_region: str = Field(
-        default="us-east-1",
-        description="AWS region for S3 operations.",
-        alias="AWS_REGION",
-    )
-
-    aws_session_token: str | None = Field(
-        default=None,
-        description="AWS Session Token for temporary credentials (optional).",
-        alias="AWS_SESSION_TOKEN",
+    max_output_size: int = Field(
+        default=50000,
+        description="Maximum output size per buffer in bytes.",
+        alias="MCP_MAX_OUTPUT_SIZE",
     )
 
     codebase_path: str | None = Field(
@@ -115,13 +55,6 @@ class Settings(BaseSettings):  # type: ignore[misc]
         description="List of programming languages to analyze in the codebase. "
         "Supported: java, kotlin, python, typescript, javascript, cpp, rust",
         alias="SUPPORTED_LANGUAGES",
-    )
-
-    kubeconfig_path: str | None = Field(
-        default=None,
-        description="Path to the Kubernetes config file. "
-        "If not provided, will use default kubeconfig or in-cluster config.",
-        alias="KUBECONFIG_PATH",
     )
 
     external_mcps_json: str | None = Field(
@@ -153,7 +86,7 @@ class Settings(BaseSettings):  # type: ignore[misc]
                 return config
             else:
                 raise ValueError("EXTERNAL_MCPS_JSON must be a JSON object")
-        except Exception as e:
+        except Exception:
             return {}
 
     model_config = {

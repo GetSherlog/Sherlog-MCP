@@ -87,7 +87,8 @@ pydantic_core.to_json = _enhanced_to_json
 
 app = FastMCP(name="SherlogMCP")
 
-app.add_middleware(SessionMiddleware(max_sessions=4))
+settings = get_settings()
+app.add_middleware(SessionMiddleware(max_sessions=settings.max_sessions))
 
 
 @app.custom_route("/health", methods=["GET"])
