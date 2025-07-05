@@ -7,7 +7,8 @@ and executing CLI commands with DataFrame output support.
 from typing import Any
 import pandas as pd
 from sherlog_mcp.tools.utilities import return_result
-from sherlog_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
+from sherlog_mcp.ipython_shell_utils import run_code_in_shell
+from fastmcp import Context
 from sherlog_mcp.session import app
 from .pypi_core import (
     PyPIClient,
@@ -16,7 +17,10 @@ from .pypi_core import (
     NetworkError,
     PyPIError,
 )
-from .tool_utils import dataframe_to_dict, error_dict
+from sherlog_mcp.middleware.session_middleware import get_session_shell
+import logging
+
+logger = logging.getLogger(__name__)
 
 def format_package_info(package_data: dict[str, Any]) -> dict[str, Any]:
     """Format package information for MCP response.
@@ -121,15 +125,11 @@ async def _search_pypi_impl(package_name: str) -> pd.DataFrame:
         return pd.DataFrame([error])
 
 
-_SHELL.push({
-    "_search_pypi_impl": _search_pypi_impl,
-})
-
-
 @app.tool()
 async def call_cli(
     command: str,
     save_as: str,
+    ctx: Context,
 ) -> dict:
     """
     Execute a CLI command using IPython's ! syntax and save the result.
@@ -139,8 +139,8 @@ async def call_cli(
         save_as: Variable name to save the result in IPython namespace
         
     Returns:
-        dict: Response with command execution results. We dont return the result of the command, we just save it to the IPython namespace. \
-        Inspect the result with `execute_python_code("save_as")`
+        dict: Response stating that if the command was successful and saved to the IPython namespace.
+        You can inspect the result `save_as` and work with it as you would with any other variable.
 
     If a command fails, it usually means that the command is not installed.
     You can install it with an apt install command.
@@ -164,9 +164,13 @@ async def call_cli(
     >>> execute_python_code("files.n")  # With line numbers
     """
 
-    code = f"{save_as} = !{command}"
-    
-    execution_result = await run_code_in_shell(code)
+    code = f"{save_as} = !{command}\n{save_as}"
+    session_id = ctx.session_id or "default"
+    shell = get_session_shell(session_id)
+    if not shell:
+        raise RuntimeError(f"No shell found for session {session_id}")
+    execution_result = await run_code_in_shell(code, shell, session_id)
+    logger.info(f"Executing command: {code}")
     return return_result(code, execution_result, command, save_as)
 
 
@@ -174,7 +178,8 @@ async def call_cli(
 async def search_pypi(
     query: str,
     *, 
-    save_as: str
+    save_as: str,
+    ctx: Context,
 ) -> dict:
     """
     Search PyPI for Python packages.
@@ -197,8 +202,11 @@ async def search_pypi(
     >>> execute_python_code("search_results['name'].tolist()")
     """
     code = f'{save_as} = _search_pypi_impl("{query}")\n{save_as}'
-    
-    execution_result = await run_code_in_shell(code)
+    session_id = ctx.session_id or "default"
+    shell = get_session_shell(session_id)
+    if not shell:
+        raise RuntimeError(f"No shell found for session {session_id}")
+    execution_result = await run_code_in_shell(code, shell, session_id)
     return return_result(code, execution_result, query, save_as)
 
 def _query_apt_package_status_impl(package: str) -> pd.DataFrame:
@@ -234,11 +242,8 @@ def _query_apt_package_status_impl(package: str) -> pd.DataFrame:
         return pd.DataFrame([error])
 
 
-_SHELL.push({"_query_apt_package_status_impl": _query_apt_package_status_impl})
-
-
 @app.tool()
-async def query_apt_package_status(package: str, *, save_as: str) -> dict:
+async def query_apt_package_status(package: str, *, save_as: str, ctx: Context) -> dict:
     """
     Query apt package status (installed, upgradable, available).
 
@@ -251,16 +256,9 @@ async def query_apt_package_status(package: str, *, save_as: str) -> dict:
     """
     code = f'{save_as} = _query_apt_package_status_impl("{package}")\n{save_as}'
 
-    execution_result = await run_code_in_shell(code)
-    if (
-        execution_result
-        and hasattr(execution_result, "result")
-        and execution_result.result is not None
-    ):
-        df = execution_result.result
-        return dataframe_to_dict(
-            df, saved_as=save_as, message="Queried apt package status"
-        )
-    return error_dict(
-        "Failed to query apt package status", "No result returned from code execution"
-    )
+    session_id = ctx.session_id or "default"
+    shell = get_session_shell(session_id)
+    if not shell:
+        raise RuntimeError(f"No shell found for session {session_id}")
+    execution_result = await run_code_in_shell(code, shell, session_id)
+    return return_result(code, execution_result, package, save_as)

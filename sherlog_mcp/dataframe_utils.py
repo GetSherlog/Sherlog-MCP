@@ -2,7 +2,7 @@
 
 This module provides a bridge between polars and pandas DataFrames,
 allowing the codebase to use polars for performance while maintaining
-pandas compatibility for LogAI library integration.
+pandas compatibility.
 """
 
 import logging
@@ -236,21 +236,6 @@ def read_csv_smart(file_path: str, **kwargs) -> DataFrame:
     return pl.read_csv(file_path, **kwargs)
 
 
-def ensure_pandas_for_logai(df: DataFrame) -> pd.DataFrame:
-    """Ensure DataFrame is in pandas format for LogAI library compatibility.
-
-    This function should be used before passing DataFrames to LogAI components.
-
-    Args:
-        df: Input DataFrame
-
-    Returns:
-        pd.DataFrame: Pandas DataFrame ready for LogAI
-
-    """
-    return to_pandas(df)
-
-
 def optimize_for_analytics(df: DataFrame) -> DataFrame:
     """Optimize DataFrame for analytics operations.
 
@@ -282,16 +267,13 @@ def to_json_serializable(
         JSON-serializable data (list of dicts for DataFrames, original data otherwise)
 
     """
-    import json
 
     if isinstance(df, pd.DataFrame):
-        # Handle NaN and infinity values before JSON conversion
         df_clean = df.replace([np.inf, -np.inf], ['Infinity', '-Infinity'])
         df_clean = df_clean.where(pd.notnull(df_clean), None)
         try:
             return json.loads(df_clean.to_json(orient="records", date_format="iso"))
         except (ValueError, TypeError):
-            # Fallback: convert to dict records directly
             return df_clean.to_dict(orient="records")
     elif isinstance(df, pl.DataFrame):
         return df.to_dicts()
@@ -306,7 +288,6 @@ __all__ = [
     "to_pandas",
     "smart_create_dataframe",
     "read_csv_smart",
-    "ensure_pandas_for_logai",
     "optimize_for_analytics",
     "to_json_serializable",
 ]

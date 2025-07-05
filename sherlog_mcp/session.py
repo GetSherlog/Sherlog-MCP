@@ -1,4 +1,4 @@
-"""Central session & utility helpers for LogAI FastMCP server.
+"""Central session & utility helpers for Sherlog FastMCP server.
 
 This module owns the FastMCP *app* instance plus the in-memory scratch-pad
 (`session_vars`) that lets individual tool calls communicate with each other.
@@ -6,21 +6,20 @@ All other modules should *only* import what they need from here instead of
 instantiating additional `FastMCP` objects.
 """
 
-import atexit
 import json
 import logging
 from pathlib import Path
 from typing import Any
 
-import dill
 import numpy as np
 import pandas as pd
 import polars as pl
 
 import pydantic_core
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 from sherlog_mcp.config import get_settings
+from sherlog_mcp.middleware import SessionMiddleware
 
 _original_to_json = pydantic_core.to_json
 
@@ -88,6 +87,8 @@ pydantic_core.to_json = _enhanced_to_json
 
 app = FastMCP(name="SherlogMCP")
 
+app.add_middleware(SessionMiddleware(max_sessions=4))
+
 
 @app.custom_route("/health", methods=["GET"])
 async def health_check(request):
@@ -111,60 +112,6 @@ settings = get_settings()
 logger.setLevel(getattr(logging, settings.log_level.upper(), logging.INFO))
 
 
-SESSIONS_DIR = Path(".mcp_session")
+# Use Docker volume path for persistence
+SESSIONS_DIR = Path("/app/data/sessions")
 SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
-
-SESSION_FILE = SESSIONS_DIR / "session_state.pkl"
-
-
-def save_session():
-    """Save current session state"""
-    try:
-        from sherlog_mcp.ipython_shell_utils import _SHELL
-
-        state = {
-            "session_vars": session_vars,
-            "session_meta": session_meta,
-            "user_ns": {
-                k: v
-                for k, v in _SHELL.user_ns.items()
-                if not k.startswith("_")
-                and k not in {"In", "Out", "exit", "quit", "get_ipython"}
-            },
-        }
-
-        with open(SESSION_FILE, "wb") as f:
-            dill.dump(state, f)
-
-        logger.info(f"Session saved to {SESSION_FILE}")
-
-    except Exception as e:
-        logger.error(f"Session save failed: {e}")
-
-
-def restore_session():
-    """Restore session state if backup exists"""
-    if not SESSION_FILE.exists():
-        return
-
-    try:
-        from sherlog_mcp.ipython_shell_utils import _SHELL
-
-        with open(SESSION_FILE, "rb") as f:
-            state = dill.load(f)
-
-        session_vars.clear()
-        session_vars.update(state.get("session_vars", {}))
-
-        session_meta.clear()
-        session_meta.update(state.get("session_meta", {}))
-
-        _SHELL.user_ns.update(state.get("user_ns", {}))
-
-        logger.info("Session restored")
-
-    except Exception as e:
-        logger.error(f"Session restore failed: {e}")
-
-
-atexit.register(save_session)

@@ -17,10 +17,6 @@ def main():
     """Main entry point for the MCP server"""
     logger.info("Starting Sherlog MCP Server...")
 
-    from sherlog_mcp.session import restore_session
-
-    restore_session()
-
     logger.info("Registering external MCP tools...")
     try:
         asyncio.run(external_mcp_tools.auto_register_external_mcps())
@@ -33,7 +29,7 @@ def main():
     
     logger.info(f"Starting Sherlog MCP server on {host}:{port}")
     logger.info("Transport: streamable-http (stateful)")
-    http_app  = app.streamable_http_app()
+    http_app  = app.http_app()
 
     uvicorn.run(http_app, host=host, port=port)
 

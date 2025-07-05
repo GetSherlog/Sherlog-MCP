@@ -74,8 +74,6 @@ For other MCP clients that support streamable-http transport, you can connect di
 
 Once connected, you'll have access to:
 
-- **discover_clis()** - Find available CLI tools
-- **discover_packages()** - List installed Python packages
 - **call_cli()** - Execute CLI commands
 - **search_pypi()** - Search for Python packages
 - **execute_python_code()** - Run Python code

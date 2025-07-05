@@ -5,13 +5,15 @@ import os
 import pandas as pd
 
 from sherlog_mcp.config import get_settings
-from sherlog_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
+from sherlog_mcp.ipython_shell_utils import run_code_in_shell
+from fastmcp import Context
 from sherlog_mcp.session import app, logger
 from sherlog_mcp.tools.utilities import return_result
 
 from .file_loading import load_files
 from .treesitter_parser import LanguageEnum, Treesitter
-from .tool_utils import dataframe_to_dict, error_dict
+
+from sherlog_mcp.middleware.session_middleware import get_session_shell
 
 
 def _codebase_path_available() -> bool:
@@ -278,8 +280,8 @@ class ExactCodeRetriever:
 
 def _find_method_implementation_impl(
     method_name: str,
+    codebase_path: str,
     class_name: str | None = None,
-    codebase_path: str | None = None,
     supported_languages: list[str] | None = None,
 ) -> pd.DataFrame:
     """Implementation function for finding method implementations.
@@ -290,15 +292,8 @@ def _find_method_implementation_impl(
     """
     settings = get_settings()
 
-    if not codebase_path:
-        codebase_path = settings.codebase_path
     if not supported_languages:
         supported_languages = settings.supported_languages
-
-    if not codebase_path:
-        raise ValueError(
-            "Codebase path not configured. Set CODEBASE_PATH environment variable."
-        )
 
     if not os.path.exists(codebase_path):
         raise ValueError(f"Codebase path does not exist: {codebase_path}")
@@ -327,7 +322,7 @@ def _find_method_implementation_impl(
 
 def _find_class_implementation_impl(
     class_name: str,
-    codebase_path: str | None = None,
+    codebase_path: str,
     supported_languages: list[str] | None = None,
 ) -> pd.DataFrame:
     """Implementation function for finding class implementations.
@@ -338,15 +333,8 @@ def _find_class_implementation_impl(
     """
     settings = get_settings()
 
-    if not codebase_path:
-        codebase_path = settings.codebase_path
     if not supported_languages:
         supported_languages = settings.supported_languages
-
-    if not codebase_path:
-        raise ValueError(
-            "Codebase path not configured. Set CODEBASE_PATH environment variable."
-        )
 
     if not os.path.exists(codebase_path):
         raise ValueError(f"Codebase path does not exist: {codebase_path}")
@@ -374,7 +362,7 @@ def _find_class_implementation_impl(
 
 
 def _list_all_methods_impl(
-    codebase_path: str | None = None, supported_languages: list[str] | None = None
+    codebase_path: str, supported_languages: list[str] | None = None
 ) -> pd.DataFrame:
     """Implementation function for listing all methods.
 
@@ -384,15 +372,8 @@ def _list_all_methods_impl(
     """
     settings = get_settings()
 
-    if not codebase_path:
-        codebase_path = settings.codebase_path
     if not supported_languages:
         supported_languages = settings.supported_languages
-
-    if not codebase_path:
-        raise ValueError(
-            "Codebase path not configured. Set CODEBASE_PATH environment variable."
-        )
 
     if not os.path.exists(codebase_path):
         raise ValueError(f"Codebase path does not exist: {codebase_path}")
@@ -408,7 +389,7 @@ def _list_all_methods_impl(
 
 
 def _list_all_classes_impl(
-    codebase_path: str | None = None, supported_languages: list[str] | None = None
+    codebase_path: str, supported_languages: list[str] | None = None
 ) -> pd.DataFrame:
     """Implementation function for listing all classes.
 
@@ -418,15 +399,8 @@ def _list_all_classes_impl(
     """
     settings = get_settings()
 
-    if not codebase_path:
-        codebase_path = settings.codebase_path
     if not supported_languages:
         supported_languages = settings.supported_languages
-
-    if not codebase_path:
-        raise ValueError(
-            "Codebase path not configured. Set CODEBASE_PATH environment variable."
-        )
 
     if not os.path.exists(codebase_path):
         raise ValueError(f"Codebase path does not exist: {codebase_path}")
@@ -442,7 +416,7 @@ def _list_all_classes_impl(
 
 
 def _get_codebase_stats_impl(
-    codebase_path: str | None = None, supported_languages: list[str] | None = None
+    codebase_path: str, supported_languages: list[str] | None = None
 ) -> pd.DataFrame:
     """Implementation function for getting codebase statistics.
 
@@ -454,20 +428,8 @@ def _get_codebase_stats_impl(
 
     settings = get_settings()
 
-    env_vars = os.environ
-
-    if not settings.codebase_path:
-        codebase_path = env_vars.get("CODEBASE_PATH")
-    else:
-        codebase_path = settings.codebase_path
-
     if not supported_languages:
         supported_languages = settings.supported_languages
-
-    if not codebase_path:
-        raise ValueError(
-            "Codebase path not configured. Set CODEBASE_PATH environment variable."
-        )
 
     if not os.path.exists(codebase_path):
         raise ValueError(f"Codebase path does not exist: {codebase_path}")
@@ -494,23 +456,13 @@ def _get_codebase_stats_impl(
     df = pd.DataFrame(data)
     return df
 
-
-_SHELL.push(
-    {
-        "_find_method_implementation_impl": _find_method_implementation_impl,
-        "_find_class_implementation_impl": _find_class_implementation_impl,
-        "_list_all_methods_impl": _list_all_methods_impl,
-        "_list_all_classes_impl": _list_all_classes_impl,
-        "_get_codebase_stats_impl": _get_codebase_stats_impl,
-    }
-)
-
 @app.tool()
 async def find_method_implementation(
     method_name: str,
     class_name: str | None = None,
     *,
     save_as: str = "method_results",
+    ctx: Context,
 ) -> dict:
     """Find method implementation(s) by exact name in configured programming languages.
 
@@ -549,13 +501,16 @@ async def find_method_implementation(
         code = f'{save_as} = _find_method_implementation_impl("{method_name}", "{class_name}")\n{save_as}'
     else:
         code = f'{save_as} = _find_method_implementation_impl("{method_name}")\n{save_as}'
-
-    execution_result = await run_code_in_shell(code)
+    session_id = ctx.session_id or "default"
+    shell = get_session_shell(session_id)
+    if not shell:
+        raise RuntimeError(f"No shell found for session {session_id}")
+    execution_result = await run_code_in_shell(code, shell, session_id)
     return return_result(code, execution_result, method_name, save_as)
 
 @app.tool()
 async def find_class_implementation(
-    class_name: str, *, save_as: str = "class_results"
+    class_name: str, *, save_as: str = "class_results", ctx: Context
 ) -> dict:
     """Find class implementation(s) by exact name in configured programming languages.
 
@@ -587,15 +542,19 @@ async def find_class_implementation(
 
     """
     code = f'{save_as} = _find_class_implementation_impl("{class_name}")\n{save_as}'
-
-    execution_result = await run_code_in_shell(code)
+    session_id = ctx.session_id or "default"
+    shell = get_session_shell(session_id)
+    if not shell:
+        raise RuntimeError(f"No shell found for session {session_id}")
+    execution_result = await run_code_in_shell(code, shell, session_id)
     return return_result(code, execution_result, class_name, save_as)
 
 @app.tool()
-async def list_all_methods(*, save_as: str = "all_methods") -> dict:
+async def list_all_methods(codebase_path: str, *, save_as: str = "all_methods", ctx: Context) -> dict:
     """List all methods in the configured programming languages.
 
     Args:
+        codebase_path: The path to the codebase to list methods from
         save_as: Variable name to save results in IPython shell
 
     Returns:
@@ -624,16 +583,20 @@ async def list_all_methods(*, save_as: str = "all_methods") -> dict:
     >>> execute_python_code("all_methods['class_name'].unique()")
 
     """
-    code = f"{save_as} = _list_all_methods_impl()\n{save_as}"
-
-    execution_result = await run_code_in_shell(code)
+    code = f"{save_as} = _list_all_methods_impl(\"{codebase_path}\")\n{save_as}"
+    session_id = ctx.session_id or "default"
+    shell = get_session_shell(session_id)
+    if not shell:
+        raise RuntimeError(f"No shell found for session {session_id}")
+    execution_result = await run_code_in_shell(code, shell, session_id)
     return return_result(code, execution_result, "list_all_methods", save_as)
 
 @app.tool()
-async def list_all_classes(*, save_as: str = "all_classes") -> dict:
+async def list_all_classes(codebase_path: str, *, save_as: str = "all_classes", ctx: Context) -> dict:
     """List all classes in the configured programming languages.
 
     Args:
+        codebase_path: The path to the codebase to list classes from
         save_as: Variable name to save results in IPython shell
 
     Returns:
@@ -659,27 +622,36 @@ async def list_all_classes(*, save_as: str = "all_classes") -> dict:
     >>> execute_python_code("all_classes[all_classes['class_name'].str.endswith('Service')]")
 
     """
-    code = f"{save_as} = _list_all_classes_impl()\n{save_as}"
-
-    execution_result = await run_code_in_shell(code)
+    code = f"{save_as} = _list_all_classes_impl(\"{codebase_path}\")\n{save_as}"
+    session_id = ctx.session_id or "default"
+    shell = get_session_shell(session_id)
+    if not shell:
+        raise RuntimeError(f"No shell found for session {session_id}")
+    execution_result = await run_code_in_shell(code, shell, session_id)
     return return_result(code, execution_result, "list_all_classes", save_as)
 
 @app.tool()
 async def get_codebase_stats(
-    *, save_as: str = "codebase_stats"
+    codebase_path: str,
+    *, save_as: str = "codebase_stats", ctx: Context
 ) -> dict:
     """Get statistics about the configured codebase.
 
     Args:
+        codebase_path: The path to the codebase to get statistics from
         save_as: Variable name to save results in IPython shell
 
     Returns:
         dict: Response with codebase statistics
 
     """
-    code = f"{save_as} = _get_codebase_stats_impl()\n{save_as}"
+    code = f"{save_as} = _get_codebase_stats_impl(\"{codebase_path}\")\n{save_as}"
 
-    execution_result = await run_code_in_shell(code)
+    session_id = ctx.session_id or "default"
+    shell = get_session_shell(session_id)
+    if not shell:
+        raise RuntimeError(f"No shell found for session {session_id}")
+    execution_result = await run_code_in_shell(code, shell, session_id)
     return return_result(code, execution_result, "get_codebase_stats", save_as)
 
 @app.tool()
@@ -726,7 +698,10 @@ async def configure_supported_languages(
         config_line = f"{save_as} = {repr(valid_requested)}"
         print_line = f"print('Configured ' + str(len({save_as})) + ' languages: ' + ', '.join({save_as}))"
         code = config_line + "\n" + print_line
-        await run_code_in_shell(code)
+        shell = get_session_shell("default")
+        if not shell:
+            raise RuntimeError("No shell found for default session")
+        await run_code_in_shell(code, shell, "default")
 
         result_msg = [
             f"Successfully configured {len(valid_requested)} languages for code analysis:",

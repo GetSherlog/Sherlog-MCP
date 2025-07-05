@@ -30,11 +30,6 @@ Think of it as giving Claude a persistent Python notebook that never forgets, wh
 - **Unified Namespace**: External tools' results become DataFrames in the shared workspace
 - **Zero Configuration**: Just add external MCPs to your environment
 
-### 📈 Built-in Analytics
-- **Log Analysis**: Powered by Salesforce's LogAI - anomaly detection, clustering, parsing
-- **Data Sources**: S3, local files, GitHub, Grafana, and more
-- **Processing Tools**: Feature extraction, vectorization, preprocessing pipelines
-
 ## Installation
 
 ### Prerequisites

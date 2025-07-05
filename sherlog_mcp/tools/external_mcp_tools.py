@@ -1,8 +1,7 @@
 """External MCP Tools for Sherlog MCP Server
 
 This module provides dynamic integration with external MCP servers.
-It discovers and registers tools from configured MCP servers at runtime,
-making them available as native LogAI tools with DataFrame integration.
+It discovers and registers tools from configured MCP servers at runtime.
 """
 
 import asyncio
@@ -17,7 +16,8 @@ from mcp.client.stdio import stdio_client
 
 from sherlog_mcp.config import get_settings
 from sherlog_mcp.dataframe_utils import smart_create_dataframe, to_json_serializable
-from sherlog_mcp.ipython_shell_utils import _SHELL, run_code_in_shell
+from sherlog_mcp.ipython_shell_utils import run_code_in_shell
+from fastmcp import Context
 from sherlog_mcp.session import app, logger
 
 
@@ -165,7 +165,7 @@ def _create_parameter_from_schema(param_name: str, param_info: dict) -> inspect.
 def register_external_tool(
     mcp_name: str, tool_info: types.Tool, mcp_config: dict[str, Any]
 ):
-    """Register a single external MCP tool with the LogAI server.
+    """Register a single external MCP tool with sherlog mcp.
 
     Args:
         mcp_name: Name of the MCP server
@@ -215,8 +215,18 @@ def register_external_tool(
     )
     parameters.append(save_as_param)
     
+    ctx_param = inspect.Parameter(
+        "ctx",
+        inspect.Parameter.KEYWORD_ONLY,
+        annotation=Context
+    )
+    parameters.append(ctx_param)
+    
     doc_lines.append(
         "\n  save_as: str - Variable name to store results in IPython shell"
+    )
+    doc_lines.append(
+        "  ctx: Context - MCP context (provided automatically)"
     )
     doc_lines.append(
         "\nResults persist as '{save_as}'."
@@ -294,6 +304,7 @@ def register_external_tool(
             
             call_params = dict(bound_args.arguments)
             save_as = call_params.pop("save_as", f"{full_tool_name}_result")
+            ctx = call_params.pop("ctx", None)
             
             missing_required = []
             for param_name in required_params:
@@ -314,19 +325,24 @@ def register_external_tool(
             )
 
             try:
-                execution_result = await run_code_in_shell(code)
+                from sherlog_mcp.middleware.session_middleware import get_session_shell
+                session_id = ctx.session_id if ctx else "default"
+                shell = get_session_shell(session_id)
+                if not shell:
+                    raise RuntimeError(f"No shell found for session {session_id}")
+                
+                execution_result = await run_code_in_shell(code, shell, session_id)
                 
                 if execution_result and hasattr(execution_result, 'error_in_exec') and execution_result.error_in_exec:
-                    error_msg = str(execution_result.error_in_exec)
                     return {
-                        "error": error_msg,
+                        "error": str(execution_result.error_in_exec),
                         "error_type": type(execution_result.error_in_exec).__name__,
                         "tool": tool_info.name,
                         "mcp": mcp_name,
-                        "suggestion": "Operation failed. Check error details."
+                        "suggestion": "Tool execution failed"
                     }
                 
-                shell_result = _SHELL.user_ns.get(save_as)
+                shell_result = shell.user_ns.get(save_as)
                 if isinstance(shell_result, (pd.DataFrame, pl.DataFrame)):
                     return to_json_serializable(shell_result)
                 elif isinstance(shell_result, dict) and "error" in shell_result:
@@ -548,7 +564,7 @@ def convert_to_dataframe(data: Any) -> pd.DataFrame | Any:
         return data
 
 
-_SHELL.push({"convert_to_dataframe": convert_to_dataframe})
+# Helper function pushed to shell by SessionMiddleware
 
 
 if _external_mcps_available():
