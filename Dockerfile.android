@@ -1,0 +1,79 @@
+# syntax=docker/dockerfile:1
+
+FROM python:3.11-bookworm AS builder
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir uv
+
+WORKDIR /app
+
+COPY pyproject.toml ./
+COPY sherlog_mcp ./sherlog_mcp
+COPY sherlog_mcp_server.py ./
+
+RUN uv pip install --system .
+
+FROM python:3.11-slim-bookworm AS runtime
+
+# Enable i386 architecture for 32-bit libraries needed by Android SDK
+RUN dpkg --add-architecture i386 \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        git \
+        ca-certificates \
+        curl \
+        nodejs \
+        npm \
+        gh \
+        # Essential Android development tools
+        wget \
+        unzip \
+        openjdk-17-jdk-headless \
+        # Required 32-bit libraries for Android SDK
+        libc6:i386 \
+        libncurses6:i386 \
+        libstdc++6:i386 \
+        zlib1g:i386 \
+        libbz2-1.0:i386 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set Android environment variables
+ENV ANDROID_HOME=/opt/android-sdk
+ENV ANDROID_SDK_ROOT=/opt/android-sdk
+ENV PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools
+
+# Download and install Android SDK Command Line Tools
+RUN mkdir -p ${ANDROID_HOME} \
+    && cd ${ANDROID_HOME} \
+    && wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip \
+    && unzip commandlinetools-linux-9477386_latest.zip \
+    && rm commandlinetools-linux-9477386_latest.zip \
+    && mkdir -p cmdline-tools/latest \
+    && mv cmdline-tools/* cmdline-tools/latest/ || true \
+    && rmdir cmdline-tools/cmdline-tools 2>/dev/null || true
+
+# Install essential Android SDK components with dynamic JAVA_HOME detection
+RUN export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which javac)))) \
+    && echo "Using JAVA_HOME: $JAVA_HOME" \
+    && yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses || true \
+    && ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager \
+        "platform-tools" \
+        "platforms;android-34" \
+        "build-tools;34.0.0"
+
+COPY --from=builder /usr/local /usr/local
+
+WORKDIR /app
+COPY sherlog_mcp ./sherlog_mcp
+COPY sherlog_mcp_server.py ./
+
+# Create data directory for session persistence
+RUN mkdir -p /app/data
+
+# Expose port for streamable-http transport
+EXPOSE 8000
+
+ENTRYPOINT ["uv", "run", "-m", "sherlog_mcp.server"] 
