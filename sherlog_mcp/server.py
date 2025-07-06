@@ -2,6 +2,8 @@ import asyncio
 import logging
 import os
 import uvicorn
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from sherlog_mcp.session import (
     app,  # noqa: F401 – side-effect: create singleton & basic tools
@@ -9,6 +11,8 @@ from sherlog_mcp.session import (
 from sherlog_mcp.tools import (
     external_mcp_tools,
 )  # noqa: F401
+
+from sherlog_mcp.api import routes
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +33,18 @@ def main():
     
     logger.info(f"Starting Sherlog MCP server on {host}:{port}")
     logger.info("Transport: streamable-http (stateful)")
-    http_app  = app.http_app()
+    
+    mcp_asgi = app.http_app(path='/mcp')
+    
+    fastapi_app = FastAPI(lifespan=mcp_asgi.lifespan)
+    fastapi_app.mount("/mcp-server", mcp_asgi)
 
-    uvicorn.run(http_app, host=host, port=port)
+    fastapi_app.include_router(routes.router)
+    
+    static_dir = os.path.join(os.path.dirname(__file__), "static")
+    fastapi_app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+
+    uvicorn.run(fastapi_app, host=host, port=port)
 
 if __name__ == "__main__":
     main()
