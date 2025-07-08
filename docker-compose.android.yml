@@ -1,0 +1,42 @@
+services:
+  sherlog-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.android
+      platforms:
+        - linux/amd64
+    container_name: sherlog-mcp-android
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data              
+      - ./android-projects:/workspace
+      - gh-config:/root/.config/gh
+      - aws-config:/root/.aws
+      - gcloud-config:/root/.config/gcloud
+      - browserstack-config:/root/.browserstack-cli.yaml
+      - mcp-data:/app/data
+    environment:
+      - PORT=8000
+      - ANDROID_HOME=/opt/android-sdk
+      - ANDROID_SDK_ROOT=/opt/android-sdk
+      - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+      - POLARS_MAX_THREADS=1
+      - POLARS_FORCE_GENERIC=1
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    networks:
+      - android-network
+
+volumes:
+  gh-config:
+  aws-config:
+  gcloud-config:
+  browserstack-config:
+  mcp-data:
+
+networks:
+  android-network:
+    name: sherlog-android-network
+    driver: bridge 

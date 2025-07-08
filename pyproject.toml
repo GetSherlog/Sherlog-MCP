@@ -15,7 +15,7 @@ dependencies = [
     "pandas",
     "numpy",
     "requests",
-    "polars",
+    "polars-lts-cpu",
     "pyarrow",
     "pydantic>=2.0,<3.0",
     "matplotlib",
