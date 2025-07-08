@@ -164,13 +164,43 @@ async def call_cli(
     >>> execute_python_code("files.n")  # With line numbers
     """
 
-    code = f"{save_as} = !{command}\n{save_as}"
+    # For multiline commands or commands with special characters, use subprocess
+    if '\n' in command or '<<' in command or '$(' in command:
+        code = f"""
+import subprocess
+import shlex
+
+try:
+    # Execute the command using subprocess for better multiline support
+    result = subprocess.run(
+        {repr(command)},
+        shell=True,
+        capture_output=True,
+        text=True
+    )
+    
+    # Create a list of output lines similar to IPython's ! syntax
+    output_lines = result.stdout.splitlines() if result.stdout else []
+    if result.stderr:
+        output_lines.extend(result.stderr.splitlines())
+    
+    # Store result in a format similar to IPython's SList
+    {save_as} = output_lines
+    {save_as}
+except Exception as e:
+    {save_as} = [f"Error executing command: {{e}}"]
+    {save_as}
+"""
+    else:
+        # For simple single-line commands, use IPython's ! syntax
+        code = f"{save_as} = !{command}\n{save_as}"
+    
     session_id = ctx.session_id or "default"
     shell = get_session_shell(session_id)
     if not shell:
         raise RuntimeError(f"No shell found for session {session_id}")
     execution_result = await run_code_in_shell(code, shell, session_id)
-    logger.info(f"Executing command: {code}")
+    logger.info(f"Executing command: {command}")
     return return_result(code, execution_result, command, save_as)
 
 

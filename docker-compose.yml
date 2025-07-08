@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   sherlog-mcp:
-    image: sherlog-mcp
+    image: sherlog-mcp-android
     build: .
     ports:
       - "8000:8000"
@@ -12,10 +12,12 @@ services:
       - gh-config:/root/.config/gh
       - aws-config:/root/.aws
       - gcloud-config:/root/.config/gcloud
+      - browserstack-config:/root/.browserstack-cli.yaml
       - mcp-data:/app/data
 
 volumes:
   gh-config:
   aws-config:
   gcloud-config:
+  browserstack-config:
   mcp-data:

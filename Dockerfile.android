@@ -1,0 +1,140 @@
+# syntax=docker/dockerfile:1
+
+FROM python:3.11-bookworm AS builder
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir uv
+
+WORKDIR /app
+
+COPY pyproject.toml ./
+COPY sherlog_mcp ./sherlog_mcp
+COPY sherlog_mcp_server.py ./
+
+RUN uv pip install --system .
+
+FROM python:3.11-slim-bookworm AS runtime
+
+# Install Android SDK and development tools (no emulator)
+RUN apt-get update \
+    && ARCH=$(dpkg --print-architecture) \
+    && PACKAGES="git ca-certificates curl wget unzip nodejs npm gh openjdk-17-jdk-headless android-sdk-platform-tools libc6-dev libstdc++6 zlib1g-dev" \
+    && if [ "$ARCH" = "amd64" ]; then \
+         PACKAGES="$PACKAGES lib32z1 lib32ncurses6 lib32stdc++6"; \
+         echo "Adding 32-bit compatibility libraries for x86_64"; \
+       else \
+         echo "Skipping 32-bit compatibility libraries for $ARCH"; \
+       fi \
+    && apt-get install -y --no-install-recommends $PACKAGES \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up Android SDK environment
+ENV ANDROID_HOME=/opt/android-sdk
+ENV ANDROID_SDK_ROOT=/opt/android-sdk
+# Set JAVA_HOME dynamically based on actual Java installation
+RUN JAVA_HOME_DETECTED=$(dirname $(dirname $(readlink -f $(which javac)))) \
+    && echo "Detected JAVA_HOME: ${JAVA_HOME_DETECTED}" \
+    && echo "export JAVA_HOME=${JAVA_HOME_DETECTED}" >> /etc/profile.d/java.sh \
+    && chmod +x /etc/profile.d/java.sh
+ENV PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/build-tools/34.0.0
+
+# Download and install Android SDK command line tools
+RUN mkdir -p ${ANDROID_HOME} \
+    && cd ${ANDROID_HOME} \
+    && ARCH=$(uname -m) \
+    && if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then \
+         echo "ARM64 architecture detected, using Linux command line tools (compatible)"; \
+         wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip; \
+       else \
+         echo "x86_64 architecture detected, using Linux command line tools"; \
+         wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip; \
+       fi \
+    && unzip commandlinetools-linux-9477386_latest.zip \
+    && rm commandlinetools-linux-9477386_latest.zip \
+    && mkdir -p cmdline-tools/latest \
+    && mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true \
+    && rmdir cmdline-tools/cmdline-tools 2>/dev/null || true \
+    && chmod +x ${ANDROID_HOME}/cmdline-tools/latest/bin/*
+
+# Install Android SDK components (build tools only, no emulator)
+RUN export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which javac)))) \
+    && mkdir -p /root/.android \
+    && touch /root/.android/repositories.cfg \
+    && echo "Accepting Android SDK licenses..." \
+    && yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses || true \
+    && echo "Updating SDK manager..." \
+    && ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --update \
+    && echo "Installing SDK components..." \
+    && ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager \
+        "platform-tools" \
+        "build-tools;34.0.0" \
+        "build-tools;33.0.2" \
+        "build-tools;30.0.3" \
+        "platforms;android-34" \
+        "platforms;android-33" \
+        "platforms;android-30" \
+        "cmake;3.22.1" \
+        "ndk;25.1.8937393" \
+    && echo "Android SDK installation complete"
+
+# Install BrowserStack CLI (optional, skip if download fails)
+RUN cd /tmp \
+    && echo "Attempting to download BrowserStack CLI..." \
+    && (wget -q "https://browserstack.com/browserstack-cli/download?arch=amd64&file=browserstack&os=linux&version=3.0.1&_gl=1*160c59b*_gcl_aw*R0NMLjE3NTIwMDEwNTQuQ2p3S0NBandnN1BEQmhCeEVpd0FmMUNWdTMzR2ZBWEk2M2t3c1VxcE9QNzUtMTZlUGdWd2IyOG9iczlNR1d1X1FWY0FyVVlVNm5sblF4b0NZSDRRQXZEX0J3RQ..*_gcl_au*MTkwMTY5OTI2NS4xNzUxODMzMzgwLjEyOTgzMDExNTguMTc1MVEzMzQ0Ni4xNzUxODMzNDU0" -O browserstack \
+        && chmod +x browserstack \
+        && mv browserstack /usr/local/bin/browserstack \
+        && echo "BrowserStack CLI installed successfully") \
+    || echo "BrowserStack CLI installation failed (not critical, continuing...)"
+
+# Copy our MCP server from builder
+COPY --from=builder /usr/local /usr/local
+
+# Add our application
+WORKDIR /app
+COPY sherlog_mcp ./sherlog_mcp
+COPY sherlog_mcp_server.py ./
+
+# Create data and workspace directories
+RUN mkdir -p /app/data \
+    && mkdir -p /workspace
+
+# Create startup script
+RUN echo '#!/bin/bash\n\
+# Source Java environment if available\n\
+if [ -f /etc/profile.d/java.sh ]; then\n\
+    source /etc/profile.d/java.sh\n\
+fi\n\
+# If JAVA_HOME is still not set, detect it dynamically\n\
+if [ -z "$JAVA_HOME" ]; then\n\
+    export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which javac))))\n\
+fi\n\
+echo "Starting Sherlog MCP Server with Android SDK Support"\n\
+echo "======================================================"\n\
+echo "System Architecture: $(uname -m)"\n\
+echo "Android SDK: ${ANDROID_HOME}"\n\
+echo "Java Version: $(java -version 2>&1 | head -1)"\n\
+echo "ADB Version: $(adb --version 2>/dev/null || echo "ADB not available")"\n\
+echo "Available Android platforms:"\n\
+ls -la ${ANDROID_HOME}/platforms/ 2>/dev/null || echo "No platforms found"\n\
+echo "Available build tools:"\n\
+ls -la ${ANDROID_HOME}/build-tools/ 2>/dev/null || echo "No build tools found"\n\
+echo "AAPT2 Test: $(${ANDROID_HOME}/build-tools/34.0.0/aapt2 version 2>/dev/null || echo "AAPT2 not working")"\n\
+echo "BrowserStack CLI: $(browserstack version 2>/dev/null || echo "Not available or not authenticated")"\n\
+echo "Environment variables:"\n\
+echo "  ANDROID_HOME=${ANDROID_HOME}"\n\
+echo "  ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}"\n\
+echo "  JAVA_HOME=${JAVA_HOME}"\n\
+echo "  PATH includes: $(echo $PATH | tr ":" "\n" | grep -E "(android|java)" | head -5)"\n\
+echo "======================================================"\n\
+echo "Starting MCP server on port 8000"\n\
+exec uv run -m sherlog_mcp.server "$@"' > /app/start_sherlog.sh
+
+RUN chmod +x /app/start_sherlog.sh
+
+# Expose MCP server port
+EXPOSE 8000
+
+ENTRYPOINT ["/app/start_sherlog.sh"] 
