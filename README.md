@@ -1,6 +1,69 @@
 # Sherlog MCP Server
 
-A powerful Model Context Protocol (MCP) server that provides a persistent IPython workspace for data analysis, log processing, and multi-agent collaboration.
+A powerful Model Context Protocol (MCP) server that provides a persistent IPython shell per session. 
+The server only exposes a limited number of tools and at the core of it just exposes the following 2 -
+
+1. `call_cli`
+2. `execute_python_code`
+
+And the rest of the tools are more for supporting the LLM to write the code or call the appropriate cli to complete the task. 
+
+For example, installing packages or installing cli. Or doing introspection of variables in the ipython shell. 
+
+The server also supports adding external mcp servers. The idea here is you can run mcp servers inside the shell that allows you to persist results in the shell with variables and results etc. 
+
+One of the primary things I have noticed is that LLMs mess up when provided with a lot of tools and also as is quite evident by now. There are multiple articles and videos (written and shared by people way more qualified than me) and they main theme across them is the problems with tools overload and context limitation. 
+
+This server is my attempt at "solving" that problem.
+
+**How you ask ?** 
+
+> **Note:** The core of this approach is:
+> 1. All tool calls are persisted to a variable in the shell and the LLM would then write code to inspect the variable, slice/dice and get the required part out of a "gigantic" payload. My idea was similar to when us engineers work with large data we get them into dataframes and then slice/dice to get the required part out.
+> 2. CLI calls are composable and that helps the LLM to get only the required content
+> 
+> Both are ways of not polluting the context with useless info.
+
+## Architecture & Design
+
+Sherlog MCP Server supports different deployment scenarios through specialized Docker containers:
+
+### Container Variants
+
+#### **Vanilla Container**
+A lightweight, general-purpose environment optimized for data analysis and development workflows.
+
+**Pre-installed Tools:**
+- **GitHub CLI (`gh`)** - Complete GitHub integration for repository management, issues, PRs, and workflows
+- **Python Ecosystem** - Full scientific computing stack (pandas, numpy, matplotlib, etc.)
+- **System Utilities** - Essential command-line tools for file operations and system management
+
+**Best For:** Data analysis, web scraping, API integrations, general development tasks
+
+#### **Android Development Container**
+A specialized environment for Android development and testing workflows.
+
+**Pre-installed Tools:**
+- **Android SDK & Build Tools** - Complete Android development environment
+- **Java Development Kit (JDK)** - Required Java runtime and development tools
+- **GitHub CLI (`gh`)** - Version control and repository management
+- **BrowserStack CLI** - Real device testing and debugging capabilities
+- **ADB & Fastboot** - Android device communication tools
+
+**Best For:** Android app development, device testing, mobile automation, CI/CD pipelines
+
+### Google OAuth Integration
+
+Sherlog MCP Server includes built-in Google OAuth 2.0 support for accessing Google Workspace services (Gmail, Drive, Calendar) directly within IPython sessions. OAuth tokens are securely stored with encryption and automatically refreshed as needed.
+
+Configure with `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` environment variables. When running with HTTP transport, OAuth endpoints are available at `/auth/google/*` for authentication flow.
+
+### Design Principles
+
+- **Environment Isolation**: Each container provides a complete, reproducible environment
+- **Tool Integration**: All CLI tools are accessible through the unified `call_cli` interface
+- **Persistent State**: Session data persists across container restarts
+- **Extensibility**: Easy to add new tools or create custom container variants
 
 ## Overview
 
@@ -35,121 +98,10 @@ Think of it as giving Claude a persistent Python notebook that maintains separat
 
 ### Prerequisites
 - Docker Desktop
-- Claude Desktop
-
-### Quick Start with Docker
-
-1. Add to Claude Desktop configuration:
-
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "sherlog": {
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "--volume=/var/run/docker.sock:/var/run/docker.sock",
-        "--mount=type=bind,src=/Users/username/,dst=/Users/username/,ro",
-        "-e", "MCP_TRANSPORT=stdio",
-        "ghcr.io/navneet-mkr/sherlog-mcp:latest"
-      ]
-    }
-  }
-}
-```
-
-2. Restart Claude Desktop
 
 ### Remote Connection Support
 
 Sherlog MCP supports connecting from remote Claude instances via HTTP transport. See [Remote Connection Guide](docs/remote-connection.md) for detailed setup instructions.
-
-### Configuration with Environment Variables
-
-For a fully configured setup with external integrations:
-
-```json
-{
-  "mcpServers": {
-    "sherlog": {
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "--volume=/var/run/docker.sock:/var/run/docker.sock",
-        "--mount=type=bind,src=/Users/username/,dst=/Users/username/,ro",
-        "-e", "MCP_TRANSPORT=stdio",
-        "-e", "GITHUB_TOKEN=your_github_token",
-        "-e", "AWS_ACCESS_KEY_ID=your_aws_key",
-        "-e", "AWS_SECRET_ACCESS_KEY=your_aws_secret",
-        "-e", "EXTERNAL_MCPS_JSON={\"filesystem\":{\"command\":\"npx\",\"args\":[\"-y\",\"@modelcontextprotocol/server-filesystem\",\"/Users/username/data\"]}}",
-        "ghcr.io/navneet-mkr/sherlog-mcp:latest"
-      ]
-    }
-  }
-}
-```
-
-**Important Notes:**
-- Replace `/Users/username/` with your actual home directory path
-- The mount path must match between source and destination for file access to work
-- Add read-only (`,ro`) to mounts for security unless write access is needed
-- Docker must be running before starting Claude Desktop
-
-### Volume Mounts Explained
-
-The Docker configuration includes two types of mounts:
-
-1. **Docker Socket** (for Docker tools):
-   ```
-   --volume=/var/run/docker.sock:/var/run/docker.sock
-   ```
-   Allows the MCP server to manage Docker containers (if using Docker tools)
-
-2. **File System Access**:
-   ```
-   --mount=type=bind,src=/Users/username/,dst=/Users/username/,ro
-   ```
-   Grants read-only access to your files. Adjust the path to limit access:
-   - For specific project: `src=/Users/username/projects,dst=/Users/username/projects`
-   - For data folder only: `src=/Users/username/data,dst=/Users/username/data`
-
-### Common Configurations
-
-**Minimal Setup** (no external integrations):
-```json
-{
-  "mcpServers": {
-    "sherlog": {
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-e", "MCP_TRANSPORT=stdio",
-        "ghcr.io/navneet-mkr/sherlog-mcp:latest"
-      ]
-    }
-  }
-}
-```
-
-**With File Access** (for log analysis):
-```json
-{
-  "mcpServers": {
-    "sherlog": {
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "--mount=type=bind,src=/path/to/logs,dst=/data/logs,ro",
-        "-e", "MCP_TRANSPORT=stdio",
-        "ghcr.io/navneet-mkr/sherlog-mcp:latest"
-      ]
-    }
-  }
-}
-```
 
 ## Configuration
 
@@ -164,24 +116,6 @@ export MCP_MAX_SESSIONS=4               # Maximum concurrent sessions (default: 
 
 # Logging
 export LOG_LEVEL=INFO
-```
-
-### External Integrations
-
-Configure API keys for built-in integrations:
-
-```bash
-# AWS
-export AWS_ACCESS_KEY_ID=your_key
-export AWS_SECRET_ACCESS_KEY=your_secret
-export AWS_REGION=us-east-1
-
-# GitHub
-export GITHUB_TOKEN=your_token
-
-# Grafana
-export GRAFANA_URL=https://your-instance.grafana.net
-export GRAFANA_API_KEY=your_key
 ```
 
 ### External MCP Servers
@@ -204,67 +138,6 @@ export EXTERNAL_MCPS_JSON='{
 }'
 ```
 
-## Core Concepts
-
-### Session-Based IPython Workspaces
-
-Each conversation gets its own isolated IPython shell:
-
-- **Session Isolation**: Variables and state are separate between conversations
-- **Automatic Persistence**: Sessions save to disk and restore when you return
-- **Smart Lifecycle**: LRU eviction ensures efficient resource usage
-- **Context Awareness**: Tools automatically use the correct session's workspace
-
-### DataFrame as Universal Currency
-
-All tools follow a simple pattern:
-1. Execute operation
-2. Store result as DataFrame in IPython namespace
-3. Return reference for next operation
-
-This creates a powerful chain of operations where each step builds on the last.
-
-### Multi-Agent Collaboration
-
-Within a session, the IPython workspace acts as a shared blackboard:
-- Agent A loads data → stores as `raw_data`
-- Agent B processes it → creates `processed_data`
-- Agent C analyzes results → uses both previous DataFrames
-
-Each session maintains its own blackboard, enabling parallel workflows.
-
-## Available Tools
-
-Sherlog MCP provides a comprehensive set of native tools optimized for the IPython workspace, with the ability to extend functionality through external MCP servers.
-
-### Native Tools (Built-in)
-
-Our native tools are designed to work seamlessly with the DataFrame-centric architecture:
-
-#### Session Management
-- `execute_python_code`: Run arbitrary Python code in the workspace
-- `list_shell_variables`: See all available DataFrames and variables
-- `session_memory_status`: Monitor memory usage and auto-reset status
-- `reset_session_now`: Manually trigger a session cleanup
-
-#### Data Sources & Loading
-- **Local Files**: `load_file_log_data`, `read_file`, `write_file`
-- **AWS S3**: `s3_list_files`, `s3_download_file`, `s3_upload_file`
-- **GitHub**: `github_fetch_issues`, `github_fetch_pull_requests`, `github_fetch_commits`
-- **Grafana**: `grafana_query_prometheus`, `grafana_query_loki`
-
-#### Log Analysis (Powered by LogAI)
-- `detect_anomalies`: Time-series and semantic anomaly detection
-- `cluster_logs`: Group similar log entries using various algorithms
-- `extract_features`: Generate ML features from log text
-- `parse_logs`: Extract structured data from unstructured logs
-- `vectorize_logs`: Convert logs to numerical representations
-
-#### Development Tools
-- **Docker**: `docker_list_containers`, `docker_logs`, `docker_exec`
-- **Kubernetes**: `k8s_get_pods`, `k8s_get_logs`, `k8s_describe_resource`
-- **Code Analysis**: `analyze_code_structure`, `search_codebase`
-
 ### External MCP Integration
 
 While Sherlog MCP includes many tools natively, you can connect any MCP server to extend functionality. External tools are automatically integrated into the IPython workspace:
@@ -274,40 +147,17 @@ While Sherlog MCP includes many tools natively, you can connect any MCP server t
 2. Results automatically convert to DataFrames
 3. Full access to the same IPython namespace
 
-#### Popular External MCPs
-- **Filesystem**: Advanced file operations beyond our built-in tools
-- **PostgreSQL/MySQL**: Direct database queries
-- **Weather**: Real-time weather data
-- **Slack**: Send messages and read channels
-- **Google Sheets**: Spreadsheet operations
-
 #### Adding External MCPs
 ```json
 "-e", "EXTERNAL_MCPS_JSON={\"postgres\":{\"command\":\"npx\",\"args\":[\"-y\",\"@modelcontextprotocol/server-postgres\"],\"env\":{\"DATABASE_URL\":\"$DATABASE_URL\"}}}"
 ```
-
-### Why Native Tools Are Better
-
-Native tools in Sherlog MCP offer advantages over external MCPs:
-- **DataFrame Integration**: Results are automatically structured as DataFrames
-- **Session Awareness**: Tools can access and modify the IPython namespace
-- **Optimized Performance**: No subprocess overhead
-- **Unified Error Handling**: Consistent error messages and recovery
-- **Cross-Tool State**: Results from one tool are immediately available to others
-
-### Tool Discovery
-
-To see all available tools in your session:
-1. Native tools: Check the list above
-2. External tools: Use `list_external_tools()` to see connected MCP servers
-3. In Claude: Ask "What tools do you have available?"
 
 ## Architecture
 
 ```
 Claude Desktop
      ↓
-Sherlog MCP Server (stdio/http)
+Sherlog MCP Server (http)
      ↓
 Session Middleware (manages shells)
      ↓
@@ -315,18 +165,10 @@ IPython Shells (one per session)
      ├── Built-in Tools (return DataFrames)
      ├── External MCP Tools (via proxy)
      └── User Code (execute_python_code)
+     └── User CLI (call_cli)
 ```
 
 ## Advanced Usage
-
-### Session Management
-
-The server provides sophisticated session handling:
-- **Isolated Workspaces**: Each session gets its own IPython shell
-- **Automatic Persistence**: Sessions save to `/app/data/sessions/` and restore on reconnect
-- **Resource Limits**: Maximum 4 concurrent sessions with LRU eviction
-- **Smart Memory Management**: Auto-cleanup after configurable operations
-- **Session Tools**: Monitor and manage sessions with `session_memory_status` and `reset_session_now`
 
 ### Working with External MCPs
 
@@ -340,52 +182,9 @@ Example flow:
 - LogAI tools analyze the data → create new DataFrames
 - Custom Python code combines results → final analysis
 
-## Development
-
-### Building from Source
-
-If you want to build and run locally:
-
-1. Clone the repository:
-```bash
-git clone https://github.com/navneet-mkr/sherlog-mcp.git
-cd sherlog-mcp
-```
-
-2. Build the Docker image:
-```bash
-./build.sh
-```
-
-3. Use your local image in Claude Desktop by replacing the image name:
-```json
-"ghcr.io/navneet-mkr/sherlog-mcp:latest"
-```
-with:
-```json
-"ghcr.io/navneet-mkr/sherlog-mcp:your-version"
-```
-
-### Running Tests
-```bash
-pytest tests/
-```
-
-### Debug Mode
-```bash
-docker run --rm -it \
-  -e LOG_LEVEL=DEBUG \
-  -e MCP_TRANSPORT=stdio \
-  ghcr.io/navneet-mkr/sherlog-mcp:latest
-```
-
 ## License
 
 Apache License 2.0 - see [LICENSE](LICENSE) file for details.
 
-## Acknowledgments
+## Talks and articles that inspired me
 
-Built on:
-- [LogAI](https://github.com/salesforce/logai) by Salesforce
-- [Model Context Protocol](https://modelcontextprotocol.io) by Anthropic
-- [IPython](https://ipython.org) for the persistent shell
