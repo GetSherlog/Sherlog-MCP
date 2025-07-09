@@ -178,3 +178,4 @@ Apache License 2.0 - see [LICENSE](LICENSE) file for details.
 [Armin's article](https://lucumr.pocoo.org/2025/7/3/tools/)
 [How to fix your context](https://www.dbreunig.com/2025/06/26/how-to-fix-your-context.html)
 [MCPs are Boring](https://lucumr.pocoo.org/2025/7/3/tools/#:~:text=Manuel%20Odendahl%27s%20excellent%20%E2%80%9C-,MCPs%20are%20Boring,-%E2%80%9D%20talk%20from%20AI) - Recommended using eval as the only tool
+[Alita paper](https://arxiv.org/abs/2505.20286) - This paper kind of influenced me as well
