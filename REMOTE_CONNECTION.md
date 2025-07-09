@@ -16,18 +16,6 @@ docker run -p 8000:8000 sherlog-mcp
 
 The server will be available at `http://localhost:8000/mcp`
 
-### 2. Deploy to Cloud
-
-You can deploy the Docker container to any cloud provider:
-- AWS ECS/Fargate
-- Google Cloud Run
-- Azure Container Instances
-- Fly.io
-- Railway
-- Render
-
-Just ensure port 8000 is exposed and accessible.
-
 ## Connecting from Claude Desktop
 
 Claude Desktop doesn't natively support remote MCP servers yet, but you can use the `mcp-remote` proxy:

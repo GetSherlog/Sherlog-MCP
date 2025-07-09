@@ -1,4 +1,8 @@
+![Sherlog Logo](images/sherlog.png)
+
 # Sherlog MCP Server
+
+
 
 A powerful Model Context Protocol (MCP) server that provides a persistent IPython shell per session. 
 The server only exposes a limited number of tools and at the core of it just exposes the following 2 -
@@ -7,6 +11,7 @@ The server only exposes a limited number of tools and at the core of it just exp
 2. `execute_python_code`
 
 And the rest of the tools are more for supporting the LLM to write the code or call the appropriate cli to complete the task. 
+There are some tools for code retrieval based on tree sitter but thats pretty much it. 
 
 For example, installing packages or installing cli. Or doing introspection of variables in the ipython shell. 
 
@@ -23,6 +28,18 @@ This server is my attempt at "solving" that problem.
 > 2. CLI calls are composable and that helps the LLM to get only the required content
 > 
 > Both are ways of not polluting the context with useless info.
+
+### Overview
+
+Sherlog MCP Server transforms Claude Desktop into a stateful data analysis powerhouse by providing:
+
+- **Session-Aware IPython Shells**: Isolated workspaces per session with automatic persistence
+- **DataFrame-Centric Architecture**: Every operation returns DataFrames, creating a unified data model
+- **Multi-Session Support**: Handle up to 4 concurrent sessions with automatic lifecycle management
+- **MCP Proxy**: Seamlessly integrates any external MCP server, executing all operations within the same IPython context
+
+Think of it as giving Claude a persistent Python notebook that maintains separate workspaces for different conversations, where every piece of data is immediately available for the next operation.
+
 
 ## Architecture & Design
 
@@ -64,35 +81,6 @@ Configure with `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` environment variabl
 - **Tool Integration**: All CLI tools are accessible through the unified `call_cli` interface
 - **Persistent State**: Session data persists across container restarts
 - **Extensibility**: Easy to add new tools or create custom container variants
-
-## Overview
-
-Sherlog MCP Server transforms Claude Desktop into a stateful data analysis powerhouse by providing:
-
-- **Session-Aware IPython Shells**: Isolated workspaces per session with automatic persistence
-- **DataFrame-Centric Architecture**: Every operation returns DataFrames, creating a unified data model
-- **Multi-Session Support**: Handle up to 4 concurrent sessions with automatic lifecycle management
-- **MCP Proxy**: Seamlessly integrates any external MCP server, executing all operations within the same IPython context
-
-Think of it as giving Claude a persistent Python notebook that maintains separate workspaces for different conversations, where every piece of data is immediately available for the next operation.
-
-## Key Features
-
-### 🐍 Session-Based IPython Workspaces
-- **Isolated Sessions**: Each conversation gets its own IPython shell instance
-- **Automatic Persistence**: Sessions save to disk and restore automatically
-- **Smart Memory Management**: Auto-cleanup after configurable operations to prevent bloat
-- **LRU Eviction**: Automatically manages up to 4 concurrent sessions
-
-### 📊 DataFrame-First Design
-- **Unified Data Model**: All tools return pandas/polars DataFrames
-- **Seamless Integration**: Results from any tool become inputs for others
-- **Smart Conversions**: Automatically converts various formats to DataFrames
-
-### 🔗 MCP Proxy Capabilities
-- **Dynamic Tool Integration**: Connect any MCP server and use its tools within the IPython context
-- **Unified Namespace**: External tools' results become DataFrames in the shared workspace
-- **Zero Configuration**: Just add external MCPs to your environment
 
 ## Installation
 
@@ -187,4 +175,6 @@ Example flow:
 Apache License 2.0 - see [LICENSE](LICENSE) file for details.
 
 ## Talks and articles that inspired me
-
+[Armin's article](https://lucumr.pocoo.org/2025/7/3/tools/)
+[How to fix your context](https://www.dbreunig.com/2025/06/26/how-to-fix-your-context.html)
+[MCPs are Boring](https://lucumr.pocoo.org/2025/7/3/tools/#:~:text=Manuel%20Odendahl%27s%20excellent%20%E2%80%9C-,MCPs%20are%20Boring,-%E2%80%9D%20talk%20from%20AI) - Recommended using eval as the only tool
