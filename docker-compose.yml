@@ -8,6 +8,10 @@ services:
       - "8000:8000"
     environment:
       - LOG_LEVEL=INFO
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-http://localhost:8000/auth/google/callback}
+      - OAUTH_ENCRYPTION_KEY=${OAUTH_ENCRYPTION_KEY}
     volumes:
       - gh-config:/root/.config/gh
       - aws-config:/root/.aws

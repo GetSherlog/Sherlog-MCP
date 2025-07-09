@@ -564,8 +564,6 @@ def convert_to_dataframe(data: Any) -> pd.DataFrame | Any:
         return data
 
 
-# Helper function pushed to shell by SessionMiddleware
-
 
 if _external_mcps_available():
     logger.info("External MCPs configuration detected - registering external MCP tools")

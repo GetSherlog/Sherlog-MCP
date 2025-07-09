@@ -31,7 +31,6 @@ def dataframe_to_dict(df: Any, saved_as: str, message: str = "Operation complete
         "note": f"Full results saved as '{saved_as}' in IPython namespace"
     }
     
-    # Add DataFrame-specific metadata if it's a DataFrame
     if hasattr(df, 'shape'):
         response["rows"] = df.shape[0]
         response["columns"] = list(df.columns) if hasattr(df, 'columns') else []

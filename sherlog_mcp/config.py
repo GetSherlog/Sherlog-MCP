@@ -68,6 +68,36 @@ class Settings(BaseSettings):  # type: ignore[misc]
         description="Configuration for external MCP servers loaded from EXTERNAL_MCPS_JSON",
     )
 
+    google_client_id: str = Field(
+        default="",
+        description="Google OAuth2 Client ID",
+        alias="GOOGLE_CLIENT_ID",
+    )
+
+    google_client_secret: str = Field(
+        default="",
+        description="Google OAuth2 Client Secret",
+        alias="GOOGLE_CLIENT_SECRET",
+    )
+
+    google_redirect_uri: str = Field(
+        default="http://localhost:8000/auth/google/callback",
+        description="Google OAuth2 Redirect URI",
+        alias="GOOGLE_REDIRECT_URI",
+    )
+
+    oauth_encryption_key: str = Field(
+        default="",
+        description="Fernet encryption key for OAuth token storage (base64 encoded)",
+        alias="OAUTH_ENCRYPTION_KEY",
+    )
+
+    oauth_storage_path: str = Field(
+        default="/app/data/oauth_tokens",
+        description="Path to store encrypted OAuth tokens",
+        alias="OAUTH_STORAGE_PATH",
+    )
+
     def load_mcp_config(self) -> dict[str, dict[str, Any]]:
         """Load MCP configuration from EXTERNAL_MCPS_JSON environment variable.
 
@@ -109,3 +139,6 @@ def get_settings() -> Settings:
     settings.external_mcps = settings.load_mcp_config()
 
     return settings
+
+
+settings = get_settings()

@@ -34,10 +34,8 @@ WORKDIR /app
 COPY sherlog_mcp ./sherlog_mcp
 COPY sherlog_mcp_server.py ./
 
-# Create data directory for session persistence
 RUN mkdir -p /app/data
 
-# Expose port for streamable-http transport
 EXPOSE 8000
 
-ENTRYPOINT ["uv", "run", "-m", "sherlog_mcp.server"] 
+ENTRYPOINT ["uv", "run", "-m", "sherlog_mcp.main"] 

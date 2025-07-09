@@ -27,8 +27,8 @@ class SmartMemoryManager:
     def __init__(self):
         from sherlog_mcp.config import get_settings
         settings = get_settings()
-        self.execution_counts = {}  # session_id -> count
-        self.last_reset_counts = {}  # session_id -> count
+        self.execution_counts = {}
+        self.last_reset_counts = {}
         self.reset_threshold = settings.auto_reset_threshold
         self.auto_reset_enabled = settings.auto_reset_enabled
         

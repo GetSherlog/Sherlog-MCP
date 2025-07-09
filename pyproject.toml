@@ -40,7 +40,11 @@ dependencies = [
     "tree-sitter-language-pack",
     "dill>=0.3.7",
     "pytest",
-    "pytest-asyncio"
+    "pytest-asyncio",
+    "google-auth-oauthlib>=1.0.0",
+    "google-auth-httplib2>=0.2.0",
+    "google-api-python-client>=2.0.0",
+    "cryptography>=41.0.0"
 ]
 
 [project.scripts]

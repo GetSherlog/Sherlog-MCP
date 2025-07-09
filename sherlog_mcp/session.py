@@ -113,6 +113,5 @@ settings = get_settings()
 logger.setLevel(getattr(logging, settings.log_level.upper(), logging.INFO))
 
 
-# Use Docker volume path for persistence
 SESSIONS_DIR = Path("/app/data/sessions")
 SESSIONS_DIR.mkdir(parents=True, exist_ok=True)

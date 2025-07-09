@@ -58,7 +58,7 @@ def format_package_info(package_data: dict[str, Any]) -> dict[str, Any]:
 
     releases = package_data.get("releases", {})
     formatted["total_versions"] = len(releases)
-    formatted["available_versions"] = list(releases.keys())[-10:]  # Last 10 versions
+    formatted["available_versions"] = list(releases.keys())[-10:]
 
     if "urls" in package_data:
         urls = package_data["urls"]
@@ -164,7 +164,6 @@ async def call_cli(
     >>> execute_python_code("files.n")  # With line numbers
     """
 
-    # For multiline commands or commands with special characters, use subprocess
     if '\n' in command or '<<' in command or '$(' in command:
         code = f"""
 import subprocess
@@ -192,7 +191,6 @@ except Exception as e:
     {save_as}
 """
     else:
-        # For simple single-line commands, use IPython's ! syntax
         code = f"{save_as} = !{command}\n{save_as}"
     
     session_id = ctx.session_id or "default"

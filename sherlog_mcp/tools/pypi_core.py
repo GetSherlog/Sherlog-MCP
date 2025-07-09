@@ -5,6 +5,7 @@ import logging
 import re
 from typing import Any
 from urllib.parse import quote
+import time
 
 import httpx
 
@@ -91,11 +92,9 @@ class PyPIClient:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
 
-        # Simple in-memory cache
         self._cache: dict[str, dict[str, Any]] = {}
-        self._cache_ttl = 300  # 5 minutes
+        self._cache_ttl = 300
 
-        # HTTP client configuration
         self._client = httpx.AsyncClient(
             timeout=httpx.Timeout(timeout),
             headers={
@@ -132,10 +131,8 @@ class PyPIClient:
         if not package_name or not package_name.strip():
             raise InvalidPackageNameError(package_name)
 
-        # Normalize package name (convert to lowercase, replace _ with -)
         normalized = re.sub(r"[-_.]+", "-", package_name.lower())
 
-        # Basic validation - package names should contain only alphanumeric, hyphens, dots, underscores
         if not re.match(r"^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$", package_name):
             raise InvalidPackageNameError(package_name)
 
@@ -174,11 +171,9 @@ class PyPIClient:
 
                 response = await self._client.get(url)
 
-                # Handle different HTTP status codes
                 if response.status_code == 200:
                     return response.json()
                 elif response.status_code == 404:
-                    # Extract package name from URL for better error message
                     package_name = url.split("/")[-2] if "/" in url else "unknown"
                     raise PackageNotFoundError(package_name)
                 elif response.status_code == 429:
@@ -232,22 +227,17 @@ class PyPIClient:
         normalized_name = self._validate_package_name(package_name)
         cache_key = self._get_cache_key(normalized_name, "info")
 
-        # Check cache first
         if use_cache and cache_key in self._cache:
             cache_entry = self._cache[cache_key]
             if self._is_cache_valid(cache_entry):
                 logger.debug(f"Using cached data for package: {normalized_name}")
                 return cache_entry["data"]
 
-        # Make API request
         url = f"{self.base_url}/{quote(normalized_name)}/json"
         logger.info(f"Fetching package info for: {normalized_name}")
 
         try:
             data = await self._make_request(url)
-
-            # Cache the result
-            import time
 
             self._cache[cache_key] = {"data": data, "timestamp": time.time()}
 

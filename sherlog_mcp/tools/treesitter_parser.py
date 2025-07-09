@@ -189,7 +189,6 @@ class Treesitter(ABC):
     def __init__(self, language: LanguageEnum):
         self.language_enum = language
 
-        # Map our language enum to tree-sitter language names
         language_mapping = {
             "java": "java",
             "kotlin": "kotlin",
@@ -293,7 +292,6 @@ class Treesitter(ABC):
         return method_declarations
 
     def _extract_doc_comment(self, node: Node):
-        # Search for doc comments preceding the node
         doc_comment = ""
         current_node = node.prev_sibling
         while current_node:

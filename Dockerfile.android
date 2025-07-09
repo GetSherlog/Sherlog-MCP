@@ -12,7 +12,6 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 COPY sherlog_mcp ./sherlog_mcp
-COPY sherlog_mcp_server.py ./
 
 RUN uv pip install --system .
 
@@ -31,17 +30,14 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends $PACKAGES \
     && rm -rf /var/lib/apt/lists/*
 
-# Set up Android SDK environment
 ENV ANDROID_HOME=/opt/android-sdk
 ENV ANDROID_SDK_ROOT=/opt/android-sdk
-# Set JAVA_HOME dynamically based on actual Java installation
 RUN JAVA_HOME_DETECTED=$(dirname $(dirname $(readlink -f $(which javac)))) \
     && echo "Detected JAVA_HOME: ${JAVA_HOME_DETECTED}" \
     && echo "export JAVA_HOME=${JAVA_HOME_DETECTED}" >> /etc/profile.d/java.sh \
     && chmod +x /etc/profile.d/java.sh
 ENV PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/build-tools/34.0.0
 
-# Download and install Android SDK command line tools
 RUN mkdir -p ${ANDROID_HOME} \
     && cd ${ANDROID_HOME} \
     && ARCH=$(uname -m) \
@@ -59,7 +55,6 @@ RUN mkdir -p ${ANDROID_HOME} \
     && rmdir cmdline-tools/cmdline-tools 2>/dev/null || true \
     && chmod +x ${ANDROID_HOME}/cmdline-tools/latest/bin/*
 
-# Install Android SDK components (build tools only, no emulator)
 RUN export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which javac)))) \
     && mkdir -p /root/.android \
     && touch /root/.android/repositories.cfg \
@@ -80,7 +75,6 @@ RUN export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which javac)))) \
         "ndk;25.1.8937393" \
     && echo "Android SDK installation complete"
 
-# Install BrowserStack CLI (optional, skip if download fails)
 RUN cd /tmp \
     && echo "Attempting to download BrowserStack CLI..." \
     && (wget -q "https://browserstack.com/browserstack-cli/download?arch=amd64&file=browserstack&os=linux&version=3.0.1&_gl=1*160c59b*_gcl_aw*R0NMLjE3NTIwMDEwNTQuQ2p3S0NBandnN1BEQmhCeEVpd0FmMUNWdTMzR2ZBWEk2M2t3c1VxcE9QNzUtMTZlUGdWd2IyOG9iczlNR1d1X1FWY0FyVVlVNm5sblF4b0NZSDRRQXZEX0J3RQ..*_gcl_au*MTkwMTY5OTI2NS4xNzUxODMzMzgwLjEyOTgzMDExNTguMTc1MVEzMzQ0Ni4xNzUxODMzNDU0" -O browserstack \
@@ -89,19 +83,14 @@ RUN cd /tmp \
         && echo "BrowserStack CLI installed successfully") \
     || echo "BrowserStack CLI installation failed (not critical, continuing...)"
 
-# Copy our MCP server from builder
 COPY --from=builder /usr/local /usr/local
 
-# Add our application
 WORKDIR /app
 COPY sherlog_mcp ./sherlog_mcp
-COPY sherlog_mcp_server.py ./
 
-# Create data and workspace directories
 RUN mkdir -p /app/data \
     && mkdir -p /workspace
 
-# Create startup script
 RUN echo '#!/bin/bash\n\
 # Source Java environment if available\n\
 if [ -f /etc/profile.d/java.sh ]; then\n\
@@ -130,11 +119,10 @@ echo "  JAVA_HOME=${JAVA_HOME}"\n\
 echo "  PATH includes: $(echo $PATH | tr ":" "\n" | grep -E "(android|java)" | head -5)"\n\
 echo "======================================================"\n\
 echo "Starting MCP server on port 8000"\n\
-exec uv run -m sherlog_mcp.server "$@"' > /app/start_sherlog.sh
+exec uv run -m sherlog_mcp.main "$@"' > /app/start_sherlog.sh
 
 RUN chmod +x /app/start_sherlog.sh
 
-# Expose MCP server port
 EXPOSE 8000
 
 ENTRYPOINT ["/app/start_sherlog.sh"] 
