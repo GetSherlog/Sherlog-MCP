@@ -76,6 +76,14 @@ RUN export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which javac)))) \
     && echo "Android SDK installation complete"
 
 RUN cd /tmp \
+    && echo "Downloading Google Workspace CLI (gwcli)..." \
+    && wget -q "https://github.com/GetSherlog/google-workspace-cli/releases/download/v1.0.0/gwcli-linux-amd64" \
+    && echo "addaf11913b1c647f6d8e7cca734235d3bbc44c149c69cbc34850f010cc20cea  gwcli-linux-amd64" | sha256sum -c - \
+    && chmod +x gwcli-linux-amd64 \
+    && mv gwcli-linux-amd64 /usr/local/bin/gwcli \
+    && echo "Google Workspace CLI installed successfully"
+
+RUN cd /tmp \
     && echo "Attempting to download BrowserStack CLI..." \
     && (wget -q "https://browserstack.com/browserstack-cli/download?arch=amd64&file=browserstack&os=linux&version=3.0.1&_gl=1*160c59b*_gcl_aw*R0NMLjE3NTIwMDEwNTQuQ2p3S0NBandnN1BEQmhCeEVpd0FmMUNWdTMzR2ZBWEk2M2t3c1VxcE9QNzUtMTZlUGdWd2IyOG9iczlNR1d1X1FWY0FyVVlVNm5sblF4b0NZSDRRQXZEX0J3RQ..*_gcl_au*MTkwMTY5OTI2NS4xNzUxODMzMzgwLjEyOTgzMDExNTguMTc1MVEzMzQ0Ni4xNzUxODMzNDU0" -O browserstack \
         && chmod +x browserstack \
@@ -112,6 +120,7 @@ echo "Available build tools:"\n\
 ls -la ${ANDROID_HOME}/build-tools/ 2>/dev/null || echo "No build tools found"\n\
 echo "AAPT2 Test: $(${ANDROID_HOME}/build-tools/34.0.0/aapt2 version 2>/dev/null || echo "AAPT2 not working")"\n\
 echo "BrowserStack CLI: $(browserstack version 2>/dev/null || echo "Not available or not authenticated")"\n\
+echo "Google Workspace CLI: $(gwcli --version 2>/dev/null || echo "Not available")"\n\
 echo "Environment variables:"\n\
 echo "  ANDROID_HOME=${ANDROID_HOME}"\n\
 echo "  ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}"\n\

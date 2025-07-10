@@ -28,6 +28,13 @@ RUN apt-get update \
         gh \
     && rm -rf /var/lib/apt/lists/*
 
+RUN cd /tmp \
+    && curl -L -o gwcli-linux-amd64 "https://github.com/GetSherlog/google-workspace-cli/releases/download/v1.0.0/gwcli-linux-amd64" \
+    && echo "addaf11913b1c647f6d8e7cca734235d3bbc44c149c69cbc34850f010cc20cea  gwcli-linux-amd64" | sha256sum -c - \
+    && chmod +x gwcli-linux-amd64 \
+    && mv gwcli-linux-amd64 /usr/local/bin/gwcli \
+    && rm -rf /tmp/*
+
 COPY --from=builder /usr/local /usr/local
 
 WORKDIR /app
