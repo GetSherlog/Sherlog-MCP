@@ -7,7 +7,7 @@ services:
         - linux/amd64
     container_name: sherlog-mcp-android
     ports:
-      - "8000:8000"
+      - "9000:8000"
     volumes:
       - ./data:/app/data              
       - ./android-projects:/workspace

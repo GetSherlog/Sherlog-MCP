@@ -17,16 +17,16 @@ logger = logging.getLogger(__name__)
 google_oauth = GoogleOAuthFlow()
 token_storage = TokenStorage()
 
-mcp_asgi_app = mcp_app.http_app()
+mcp_app = mcp_app.http_app(path='/mcp')
 
 api_app = FastAPI(
     title="Sherlog MCP Server with OAuth",
     description="MCP server with OAuth integrations",
     version="0.1.0",
-    lifespan=mcp_asgi_app.lifespan,
+    lifespan=mcp_app.lifespan,
 )
 
-api_app.mount("/mcp", mcp_asgi_app)
+api_app.mount("/mcp-server", mcp_app)
 
 
 @api_app.get("/")
