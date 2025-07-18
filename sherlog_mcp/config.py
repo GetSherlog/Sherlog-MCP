@@ -15,7 +15,7 @@ class Settings(BaseSettings):  # type: ignore[misc]
     """
 
     log_level: str = Field(
-        default="INFO",
+        default="DEBUG",
         description="Root logging level for the MCP server.",
         alias="LOG_LEVEL",
     )
@@ -65,6 +65,7 @@ class Settings(BaseSettings):  # type: ignore[misc]
 
     external_mcps: dict[str, dict[str, Any]] = Field(
         default_factory=dict,
+        alias="EXTERNAL_MCPS",
         description="Configuration for external MCP servers loaded from EXTERNAL_MCPS_JSON",
     )
 
@@ -137,6 +138,8 @@ def get_settings() -> Settings:
     settings = Settings()
 
     settings.external_mcps = settings.load_mcp_config()
+
+    print(settings.external_mcps)
 
     return settings
 

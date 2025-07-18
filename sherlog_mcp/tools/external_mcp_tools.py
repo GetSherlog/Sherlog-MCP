@@ -6,6 +6,7 @@ It discovers and registers tools from configured MCP servers at runtime.
 
 import asyncio
 import inspect
+import json
 import os
 from typing import Any, Optional
 
@@ -21,15 +22,6 @@ from fastmcp import Context
 from sherlog_mcp.session import app, logger
 
 
-def _external_mcps_available() -> bool:
-    """Check if external MCPs are configured."""
-    try:
-        settings = get_settings()
-        return bool(settings.external_mcps_json or settings.external_mcps)
-    except Exception:
-        return False
-
-
 EXTERNAL_TOOLS_REGISTRY: dict[str, dict[str, types.Tool]] = {}
 
 
@@ -40,6 +32,8 @@ async def auto_register_external_mcps():
     from external MCP servers to the Sherlog MCP server.
     """
     settings = get_settings()
+
+    print(settings.external_mcps)
     external_mcps = settings.external_mcps
 
     if not external_mcps:
@@ -134,7 +128,7 @@ async def register_mcp_tools(mcp_name: str, mcp_config: dict[str, Any]):
         raise
 
 
-def _create_parameter_from_schema(param_name: str, param_info: dict) -> inspect.Parameter:
+def _create_parameter_from_schema(param_name: str, param_info: dict, is_required: bool = False) -> inspect.Parameter:
     """Create an inspect.Parameter from JSON schema property info."""
     param_type = param_info.get("type", "string")
     default_value = param_info.get("default", inspect.Parameter.empty)
@@ -150,16 +144,26 @@ def _create_parameter_from_schema(param_name: str, param_info: dict) -> inspect.
     
     annotation = type_mapping.get(param_type, Any)
     
-    if default_value == inspect.Parameter.empty:
+    # Handle required vs optional parameters correctly
+    if is_required:
+        # Required parameters should not have defaults and should not be Optional
+        return inspect.Parameter(
+            param_name,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            default=inspect.Parameter.empty,
+            annotation=annotation
+        )
+    else:
+        # Optional parameters get Optional type annotation and None default
+        if default_value == inspect.Parameter.empty:
+            default_value = None
         annotation = Optional[annotation]
-        default_value = None
-    
-    return inspect.Parameter(
-        param_name,
-        inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        default=default_value,
-        annotation=annotation
-    )
+        return inspect.Parameter(
+            param_name,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            default=default_value,
+            annotation=annotation
+        )
 
 
 def register_external_tool(
@@ -181,7 +185,8 @@ def register_external_tool(
     doc_lines.append(f"\n[External MCP: {mcp_name}]")
     doc_lines.append(f"[Original tool: {tool_info.name}]")
 
-    parameters = []
+    parameters_required = []
+    parameters_optional = []
     required_params = set()
     
     if hasattr(tool_info, "inputSchema") and tool_info.inputSchema:
@@ -189,6 +194,9 @@ def register_external_tool(
         schema = tool_info.inputSchema
         if isinstance(schema, dict) and "properties" in schema:
             required_params = set(schema.get("required", []))
+            
+            logger.debug(f"Tool {tool_info.name} schema: {schema}")
+            logger.debug(f"Required params: {required_params}")
             
             for param_name, param_info in schema["properties"].items():
                 param_type = param_info.get("type", "any")
@@ -198,14 +206,18 @@ def register_external_tool(
                 doc_lines.append(
                     f"  {param_name}: {param_type}{req_str} - {param_desc}"
                 )
-                
                 try:
-                    param = _create_parameter_from_schema(param_name, param_info)
-                    if required and param.default != inspect.Parameter.empty:
-                        param = param.replace(default=inspect.Parameter.empty)
-                    parameters.append(param)
+                    param_obj = _create_parameter_from_schema(param_name, param_info, is_required=required)
+                    if required:
+                        parameters_required.append(param_obj)
+                    else:
+                        parameters_optional.append(param_obj)
+                    logger.debug(f"Created parameter {param_name}: {param_obj}")
                 except Exception as e:
                     logger.warning(f"Failed to create parameter {param_name}: {e}")
+
+    # Merge parameters with required first, then optional
+    parameters = parameters_required + parameters_optional
 
     save_as_param = inspect.Parameter(
         "save_as",
@@ -215,18 +227,8 @@ def register_external_tool(
     )
     parameters.append(save_as_param)
     
-    ctx_param = inspect.Parameter(
-        "ctx",
-        inspect.Parameter.KEYWORD_ONLY,
-        annotation=Context
-    )
-    parameters.append(ctx_param)
-    
     doc_lines.append(
         "\n  save_as: str - Variable name to store results in IPython shell"
-    )
-    doc_lines.append(
-        "  ctx: Context - MCP context (provided automatically)"
     )
     doc_lines.append(
         "\nResults persist as '{save_as}'."
@@ -293,80 +295,127 @@ def register_external_tool(
     )
 
     signature = inspect.Signature(parameters)
+    logger.debug(f"Created signature for {tool_info.name}: {signature}")
 
-    def create_tool_function():
-        async def tool_impl(*args, **kwargs) -> Any:
-            try:
-                bound_args = signature.bind(*args, **kwargs)
-                bound_args.apply_defaults()
-            except TypeError as e:
-                raise ValueError(f"Invalid arguments for {tool_info.name}: {e}")
-            
-            call_params = dict(bound_args.arguments)
-            save_as = call_params.pop("save_as", f"{full_tool_name}_result")
-            ctx = call_params.pop("ctx", None)
-            
-            missing_required = []
-            for param_name in required_params:
-                if param_name not in call_params or call_params[param_name] is None:
-                    missing_required.append(param_name)
-            
-            if missing_required:
-                raise ValueError(
-                    f"Missing required parameters for {tool_info.name}: {missing_required}"
-                )
+    ######################################################################
+    # Build the *internal* implementation that performs the heavy lifting
+    ######################################################################
 
-            code = generate_tool_execution_code(
-                mcp_name=mcp_name,
-                mcp_config=mcp_config,
-                tool_name=tool_info.name,
-                params=call_params,
-                save_as=save_as,
+    async def _internal_tool_impl(**_kwargs):
+        """Internal helper that executes the external MCP call.
+        Accepts **kwargs with the full parameter set generated below."""
+        try:
+            bound_args = signature.bind_partial(**_kwargs)
+            bound_args.apply_defaults()
+        except TypeError as e:
+            raise ValueError(f"Invalid arguments for {tool_info.name}: {e}")
+
+        call_params = dict(bound_args.arguments)
+        save_as = call_params.pop("save_as", f"{full_tool_name}_result")
+
+        # Validate required params
+        missing_required = [
+            p for p in required_params if call_params.get(p, None) is None
+        ]
+        if missing_required:
+            raise ValueError(
+                f"Missing required parameters for {tool_info.name}: {missing_required}"
             )
 
-            try:
-                from sherlog_mcp.middleware.session_middleware import get_session_shell
-                session_id = ctx.session_id if ctx else "default"
-                shell = get_session_shell(session_id)
-                if not shell:
-                    raise RuntimeError(f"No shell found for session {session_id}")
-                
-                execution_result = await run_code_in_shell(code, shell, session_id)
-                
-                if execution_result and hasattr(execution_result, 'error_in_exec') and execution_result.error_in_exec:
-                    return {
-                        "error": str(execution_result.error_in_exec),
-                        "error_type": type(execution_result.error_in_exec).__name__,
-                        "tool": tool_info.name,
-                        "mcp": mcp_name,
-                        "suggestion": "Tool execution failed"
-                    }
-                
-                shell_result = shell.user_ns.get(save_as)
-                if isinstance(shell_result, (pd.DataFrame, pl.DataFrame)):
-                    return to_json_serializable(shell_result)
-                elif isinstance(shell_result, dict) and "error" in shell_result:
-                    return shell_result
-                else:
-                    return execution_result.result if execution_result else None
-            except Exception as e:
+        code = generate_tool_execution_code(
+            mcp_name=mcp_name,
+            mcp_config=mcp_config,
+            tool_name=tool_info.name,
+            params=call_params,
+            save_as=save_as,
+        )
+
+        try:
+            from sherlog_mcp.middleware.session_middleware import get_session_shell
+
+            session_id = "default"
+            shell = get_session_shell(session_id)
+            if not shell:
+                raise RuntimeError(f"No shell found for session {session_id}")
+
+            execution_result = await run_code_in_shell(code, shell, session_id)
+
+            if execution_result and hasattr(execution_result, "error_in_exec") and execution_result.error_in_exec:
                 return {
-                    "error": str(e),
-                    "error_type": type(e).__name__,
+                    "error": str(execution_result.error_in_exec),
+                    "error_type": type(execution_result.error_in_exec).__name__,
                     "tool": tool_info.name,
                     "mcp": mcp_name,
-                    "suggestion": "Tool execution failed"
+                    "suggestion": "Tool execution failed",
                 }
 
-        tool_impl.__name__ = full_tool_name
-        tool_impl.__doc__ = "\n".join(doc_lines)
-        tool_impl.__signature__ = signature
+            shell_result = shell.user_ns.get(save_as)
+            if isinstance(shell_result, (pd.DataFrame, pl.DataFrame)):
+                return to_json_serializable(shell_result)
+            elif isinstance(shell_result, dict) and "error" in shell_result:
+                return shell_result
+            else:
+                return execution_result.result if execution_result else None
+        except Exception as e:
+            return {
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "tool": tool_info.name,
+                "mcp": mcp_name,
+                "suggestion": "Tool execution failed",
+            }
 
-        return tool_impl
+    ######################################################################
+    # Dynamically create a wrapper with the REAL signature so that FastMCP
+    # sees the correct parameter list when decorating.
+    ######################################################################
 
-    tool_func = create_tool_function()
+    def _build_wrapper_fn(sig: inspect.Signature):
+        """Return an async wrapper function that forwards to _internal_tool_impl.
+        The wrapper is built with `exec` so its code object contains the
+        explicit parameter list that FastMCP needs."""
 
-    decorated_func = app.tool()(tool_func)
+        # Build parameter string (without annotations to avoid import issues)
+        parts = []
+        star_added = False
+        for p in sig.parameters.values():
+            if p.kind == inspect.Parameter.KEYWORD_ONLY and not star_added:
+                parts.append("*")
+                star_added = True
+            param_src = p.name
+            if p.default is not inspect.Parameter.empty:
+                param_src += f"={repr(p.default)}"
+            parts.append(param_src)
+        params_src = ", ".join(parts)
+
+        wrapper_src = (
+            "async def _wrapper(" + params_src + "):\n"
+            "    return await _internal_tool_impl(**locals())\n"
+        )
+
+        _globals: dict[str, Any] = {
+            "_internal_tool_impl": _internal_tool_impl,
+            "await": None,  # placeholder for exec safety
+        }
+        _locals: dict[str, Any] = {}
+        exec(wrapper_src, _globals, _locals)
+        return _locals["_wrapper"]
+
+    tool_func = _build_wrapper_fn(signature)
+
+    tool_func.__name__ = full_tool_name
+    tool_func.__doc__ = "\n".join(doc_lines)
+    # The wrapper already has the correct signature
+
+    # Register with FastMCP
+    logger.debug(f"About to register tool {full_tool_name} with real signature: {inspect.signature(tool_func)}")
+    try:
+        decorated_func = app.tool()(tool_func)
+        logger.debug(f"Successfully registered {full_tool_name}")
+    except Exception as e:
+        logger.error(f"Failed during app.tool() decoration for {tool_info.name}: {e}")
+        logger.error(f"Tool signature was: {inspect.signature(tool_func)}")
+        raise
 
     setattr(app, f"_external_tool_{full_tool_name}", decorated_func)
 
@@ -565,50 +614,44 @@ def convert_to_dataframe(data: Any) -> pd.DataFrame | Any:
 
 
 
-if _external_mcps_available():
-    logger.info("External MCPs configuration detected - registering external MCP tools")
+logger.info("External MCPs configuration detected - registering external MCP tools")
 
-    @app.tool()
-    async def list_external_tools(server: str | None = None) -> dict[str, Any]:
-        """List all registered external MCP tools.
+@app.tool()
+async def list_external_tools(server: str | None = None) -> dict[str, Any]:
+    """List all registered external MCP tools.
 
-        Args:
-            server: Optional specific server name to filter by
+    Args:
+        server: Optional specific server name to filter by
 
-        Returns:
-            Dictionary with tool information organized by server
+    Returns:
+        Dictionary with tool information organized by server
 
-        """
-        result = {}
+    """
+    result = {}
 
-        for mcp_name, tools in EXTERNAL_TOOLS_REGISTRY.items():
-            if server and server != mcp_name:
-                continue
+    for mcp_name, tools in EXTERNAL_TOOLS_REGISTRY.items():
+        if server and server != mcp_name:
+            continue
 
-            server_info = {"tools": []}
+        server_info = {"tools": []}
 
-            for tool_name, tool_info in tools.items():
-                tool_data = {
-                    "name": tool_name,
-                    "full_name": f"{mcp_name}_{tool_name}",
-                    "description": tool_info.description,
-                }
+        for tool_name, tool_info in tools.items():
+            tool_data = {
+                "name": tool_name,
+                "full_name": f"{mcp_name}_{tool_name}",
+                "description": tool_info.description,
+            }
 
-                if hasattr(tool_info, "inputSchema") and tool_info.inputSchema:
-                    schema = tool_info.inputSchema
-                    if isinstance(schema, dict) and "properties" in schema:
-                        tool_data["parameters"] = {
-                            "properties": schema["properties"],
-                            "required": schema.get("required", []),
-                        }
+            if hasattr(tool_info, "inputSchema") and tool_info.inputSchema:
+                schema = tool_info.inputSchema
+                if isinstance(schema, dict) and "properties" in schema:
+                    tool_data["parameters"] = {
+                        "properties": schema["properties"],
+                        "required": schema.get("required", []),
+                    }
 
-                server_info["tools"].append(tool_data)
+            server_info["tools"].append(tool_data)
 
-            result[mcp_name] = server_info
+        result[mcp_name] = server_info
 
-        return result
-
-else:
-    logger.info(
-        "External MCPs configuration not detected - external MCP tools will not be registered"
-    )
+    return result
