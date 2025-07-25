@@ -1,6 +1,6 @@
 ![Sherlog Logo](images/sherlog.png)
 
-# Sherlog MCP Server
+# Sherlog Log AI MCP
 
 
 
@@ -139,6 +139,28 @@ While Sherlog MCP includes many tools natively, you can connect any MCP server t
 ```json
 "-e", "EXTERNAL_MCPS_JSON={\"postgres\":{\"command\":\"npx\",\"args\":[\"-y\",\"@modelcontextprotocol/server-postgres\"],\"env\":{\"DATABASE_URL\":\"$DATABASE_URL\"}}}"
 ```
+
+## Railway Deployment
+
+This MCP server is designed to be deployed on Railway with persistent session storage.
+
+### Persistent Sessions
+
+The server automatically persists IPython shell sessions across container restarts using:
+
+- **Session State**: Individual session files stored in `/app/data/sessions/`
+- **Session Metadata**: Tracked in `session_metadata.json` for session timing and state
+- **Active Session Registry**: Maintained in `session_registry.json` to restore shells on startup
+
+### Railway Volume Configuration
+
+When deploying to Railway, the `/app/data` directory is automatically persisted through Railway's persistent storage. This ensures that:
+
+- User sessions survive container restarts
+- IPython shell state (variables, imports, etc.) is maintained 
+- Session metadata persists for proper session management
+
+No additional configuration is needed for Railway deployment - the persistent volume is automatically mounted.
 
 ## Architecture
 

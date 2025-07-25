@@ -141,6 +141,8 @@ async def call_cli(
     Returns:
         dict: Response stating that if the command was successful and saved to the IPython namespace.
         You can inspect the result `save_as` and work with it as you would with any other variable.
+        
+        For --help commands, the actual output is also included in the response for immediate viewing.
 
     If a command fails, it usually means that the command is not installed.
     You can install it with an apt install command.
@@ -153,6 +155,7 @@ async def call_cli(
         - call_cli("gh repo list --json name,description", save_as="repos")
         - call_cli("ls -la", save_as="files")
         - call_cli("docker ps")
+        - call_cli("docker --help", save_as="help")  # Shows help immediately
         
     After calling this tool:
         
@@ -199,6 +202,31 @@ except Exception as e:
         raise RuntimeError(f"No shell found for session {session_id}")
     execution_result = await run_code_in_shell(code, shell, session_id)
     logger.info(f"Executing command: {command}")
+    
+    # Check if this is a help command and include output directly
+    is_help_command = any(help_flag in command.lower() for help_flag in ['--help', '-h', 'help'])
+    
+    if is_help_command and execution_result and execution_result.success and execution_result.result is not None:
+        result: Any = execution_result.result
+        try:
+            if isinstance(result, list):
+                output_text = '\n'.join(str(line) for line in result)
+            else:
+                output_text = str(result)
+        except Exception as e:
+            logger.error(f"Error formatting help output: {e}")
+            output_text = str(result)
+        
+        message = f"Command executed and saved to '{save_as}'"
+        return {
+            "success": True,
+            "message": message,
+            "command": command,
+            "saved_as": save_as,
+            "output": output_text,
+            "note": f"Help output shown above and also saved as '{save_as}' in IPython namespace"
+        }
+    
     return return_result(code, execution_result, command, save_as)
 
 

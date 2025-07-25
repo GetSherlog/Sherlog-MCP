@@ -10,6 +10,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any
+from contextlib import asynccontextmanager
 
 import numpy as np
 import pandas as pd
@@ -85,10 +86,36 @@ def _enhanced_to_json(value, *, fallback=None, **kwargs):
 
 pydantic_core.to_json = _enhanced_to_json
 
-app = FastMCP(name="SherlogMCP")
+
+@asynccontextmanager
+async def lifespan(app):
+    """Lifespan context manager for graceful startup and shutdown."""
+    # Startup
+    logger.info("Starting Sherlog MCP server with optimized session persistence")
+    
+    # Initialize session middleware - get the instance from the app's middlewares
+    try:
+        from sherlog_mcp.middleware.session_middleware import start_persistence_worker
+        await start_persistence_worker()
+    except Exception as e:
+        logger.error(f"Error during session middleware startup: {e}")
+    
+    yield
+    # Shutdown
+    logger.info("Shutting down Sherlog MCP server...")
+    try:
+        from sherlog_mcp.middleware.session_middleware import shutdown_persistence
+        await shutdown_persistence()
+        logger.info("Session persistence shutdown complete")
+    except Exception as e:
+        logger.error(f"Error during session persistence shutdown: {e}")
+
+
+app = FastMCP(name="SherlogMCP", lifespan=lifespan)
 
 settings = get_settings()
-app.add_middleware(SessionMiddleware(max_sessions=settings.max_sessions))
+session_middleware = SessionMiddleware(max_sessions=settings.max_sessions)
+app.add_middleware(session_middleware)
 
 
 @app.custom_route("/health", methods=["GET"])
