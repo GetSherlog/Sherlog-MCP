@@ -1,10 +1,13 @@
 """Tree-sitter based code parsing for Java and Kotlin."""
 
 import logging
+import re
 from abc import ABC
+from collections import defaultdict
 from enum import Enum
+from typing import Any
 
-from tree_sitter import Node
+from tree_sitter import Language, Node, Parser, Query, QueryCursor
 from tree_sitter_language_pack import get_language, get_parser
 
 logger = logging.getLogger(__name__)
@@ -187,16 +190,16 @@ class TreesitterClassNode:
 
 class Treesitter(ABC):
     def __init__(self, language: LanguageEnum):
-        self.language_enum = language
+        self.language = language
 
         language_mapping = {
-            "java": "java",
-            "kotlin": "kotlin",
-            "python": "python",
-            "typescript": "typescript",
-            "javascript": "javascript",
-            "cpp": "cpp",
-            "rust": "rust",
+            LanguageEnum.PYTHON.value.lower(): "python",
+            LanguageEnum.JAVA.value.lower(): "java",
+            LanguageEnum.JAVASCRIPT.value.lower(): "javascript",
+            LanguageEnum.TYPESCRIPT.value.lower(): "typescript",
+            LanguageEnum.RUST.value.lower(): "rust",
+            LanguageEnum.CPP.value.lower(): "cpp",
+            LanguageEnum.KOTLIN.value.lower(): "kotlin",
         }
 
         language_name = language_mapping.get(language.value.lower())
@@ -214,13 +217,19 @@ class Treesitter(ABC):
         if not self.query_config:
             raise ValueError(f"Unsupported language: {language}")
 
-        self.class_query = self.language_obj.query(self.query_config["class_query"])
-        self.method_query = self.language_obj.query(self.query_config["method_query"])
-        self.doc_query = self.language_obj.query(self.query_config["doc_query"])
+        self.class_query = Query(self.language_obj, self.query_config["class_query"])
+        self.method_query = Query(self.language_obj, self.query_config["method_query"])
+        self.doc_query = Query(self.language_obj, self.query_config["doc_query"])
 
     @staticmethod
     def create_treesitter(language: LanguageEnum) -> "Treesitter":
         return Treesitter(language)
+
+    def _execute_query_with_cursor(self, query: Query, node: Node) -> dict[str, list[Node]]:
+        """Execute a query using QueryCursor and return captures grouped by name."""
+        cursor = QueryCursor(query)
+        captures = cursor.captures(node)
+        return captures
 
     def parse(
         self, file_bytes: bytes
@@ -232,7 +241,7 @@ class Treesitter(ABC):
         method_results = []
 
         class_name_by_node = {}
-        class_captures = self.class_query.captures(root_node)
+        class_captures = self._execute_query_with_cursor(self.class_query, root_node)
         class_nodes = []
         for capture_name, nodes in class_captures.items():
             for node in nodes:
@@ -250,7 +259,7 @@ class Treesitter(ABC):
                     )
                     class_nodes.append(class_node)
 
-        method_captures = self.method_query.captures(root_node)
+        method_captures = self._execute_query_with_cursor(self.method_query, root_node)
         for capture_name, nodes in method_captures.items():
             for node in nodes:
                 if capture_name in ["method.name", "function.name"]:
@@ -281,7 +290,7 @@ class Treesitter(ABC):
 
     def _extract_methods_in_class(self, class_node):
         method_declarations = []
-        method_captures = self.method_query.captures(class_node)
+        method_captures = self._execute_query_with_cursor(self.method_query, class_node)
         for capture_name, nodes in method_captures.items():
             for node in nodes:
                 if capture_name in ["method.name", "function.name"]:
@@ -295,7 +304,7 @@ class Treesitter(ABC):
         doc_comment = ""
         current_node = node.prev_sibling
         while current_node:
-            captures = self.doc_query.captures(current_node)
+            captures = self._execute_query_with_cursor(self.doc_query, current_node)
             if captures:
                 for cap_name, cap_nodes in captures.items():
                     for cap_node in cap_nodes:

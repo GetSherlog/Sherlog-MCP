@@ -26,3 +26,6 @@ omni-search-*.json
 
 # Pickle files
 *.pkl
+
+# Cloud build files
+cloudbuild.yaml
