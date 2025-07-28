@@ -408,6 +408,9 @@ class SessionMiddleware(Middleware):
             self._start_persistence_worker()
         
         is_initialize = context.method == "initialize"
+
+        logger.info(f"Session middleware on_request: {context.method}")
+        logger.info(f"Session middleware context: {context}")
         
         # Get session ID from context
         session_id = None
