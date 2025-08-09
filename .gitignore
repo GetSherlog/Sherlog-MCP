@@ -29,3 +29,7 @@ omni-search-*.json
 
 # Cloud build files
 cloudbuild.yaml
+
+# E2B files
+e2b.Dockerfile
+e2b.toml

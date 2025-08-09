@@ -98,8 +98,7 @@ RUN pip install ast-grep-cli
 WORKDIR /app
 COPY sherlog_mcp ./sherlog_mcp
 
-RUN mkdir -p /app/data \
-    && mkdir -p /workspace
+RUN mkdir -p /app/data/sessions /app/data/oauth_tokens /workspace
 
 RUN echo '#!/bin/bash\n\
 # Source Java environment if available\n\

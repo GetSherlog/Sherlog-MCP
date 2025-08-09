@@ -41,7 +41,7 @@ WORKDIR /app
 COPY sherlog_mcp ./sherlog_mcp
 COPY sherlog_mcp_server.py ./
 
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data/sessions /app/data/oauth_tokens
 
 EXPOSE 8000
 

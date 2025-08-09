@@ -12,7 +12,6 @@ from sherlog_mcp.oauth.models import OAuthToken
 class TokenStorage:
     def __init__(self):
         self.storage_path = Path(settings.oauth_storage_path)
-        self.storage_path.mkdir(parents=True, exist_ok=True)
         
         if settings.oauth_encryption_key:
             try:

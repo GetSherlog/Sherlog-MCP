@@ -19,7 +19,6 @@ from fastmcp.server.middleware import Middleware, MiddlewareContext
 logger = logging.getLogger("SherlogMCP.SessionMiddleware")
 
 SESSIONS_DIR = Path("/app/data/sessions")
-SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 DB_FILE = SESSIONS_DIR / "sessions.db"
 
 SESSION_SHELLS: Dict[str, InteractiveShell] = {}
