@@ -100,6 +100,9 @@ COPY sherlog_mcp ./sherlog_mcp
 
 RUN mkdir -p /app/data/sessions /app/data/oauth_tokens /workspace
 
+# Enable Android tools inside this image
+ENV SHERLOG_ENABLE_ANDROID_TOOLS=1
+
 RUN echo '#!/bin/bash\n\
 # Source Java environment if available\n\
 if [ -f /etc/profile.d/java.sh ]; then\n\

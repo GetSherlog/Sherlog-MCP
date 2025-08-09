@@ -45,7 +45,8 @@ dependencies = [
     "google-auth-httplib2>=0.2.0",
     "google-api-python-client>=2.0.0",
     "cryptography>=41.0.0",
-    "ast-grep-cli"
+    "ast-grep-cli",
+    "redis>=5.0.0",
 ]
 
 [project.scripts]

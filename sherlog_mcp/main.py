@@ -11,6 +11,7 @@ from sherlog_mcp.config import settings
 from sherlog_mcp.oauth import GoogleOAuthFlow, TokenResponse, TokenStorage
 from sherlog_mcp.session import app as mcp_app
 from sherlog_mcp.tools import external_mcp_tools
+from sherlog_mcp import tools as internal_tools
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,13 @@ async def get_google_token(user_id: str):
 def main():
     """Main entry point for the MCP server with OAuth"""
     logger.info("Starting Sherlog MCP Server with OAuth...")
+
+    # Ensure built-in tools are imported so their @app.tool() registrations run
+    try:
+        loaded = getattr(internal_tools, "__all__", [])
+        logger.info(f"Registered internal tool modules: {loaded}")
+    except Exception as e:
+        logger.warning(f"Failed to load internal tools: {e}")
 
     logger.info("Registering external MCP tools...")
     try:
